@@ -288,7 +288,7 @@
     "identity-obj-proxy": "^3.0.0",
     "jest": "^29.7.0",
     "jest-environment-jsdom": "^29.7.0",
-    "jsdom": "^11.0.0",
+    "jsdom": "^23.0.1",
     "json-loader": "^0.5.7",
     "jsonwebtoken": "^8.5.1",
     "less": "^4.1.3",
