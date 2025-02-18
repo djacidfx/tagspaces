@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -20,6 +20,7 @@ import React from 'react';
 import { useDrop } from 'react-dnd';
 import { TS } from '-/tagspaces.namespace';
 import { classes, DnD } from '-/components/DnD.css';
+import { CommonLocation } from '-/utils/CommonLocation';
 
 /*const styles: any = () => ({
   dropzone: {
@@ -41,7 +42,7 @@ interface Props {
   onDrop: (item: any, monitor: any) => void;
   children: any;
   targetPath?: string;
-  targetLocation?: TS.Location;
+  targetLocation?: CommonLocation;
 }
 
 const TargetMoveFileBox = (props: Props) => {
@@ -70,7 +71,11 @@ const TargetMoveFileBox = (props: Props) => {
   });
   return (
     <div ref={drop}>
-      {canDrop && isOver && <DnD className={classes.dropzone} />}
+      {canDrop && isOver && (
+        <DnD>
+          <div className={classes.dropzone}></div>
+        </DnD>
+      )}
       {children}
     </div>
   );

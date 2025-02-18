@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,7 +16,7 @@
  *
  */
 
-import React from 'react';
+import React, { useEffect } from 'react';
 import { useDrag } from 'react-dnd';
 import { getEmptyImage } from 'react-dnd-html5-backend';
 import DragItemTypes from './DragItemTypes';
@@ -46,16 +46,20 @@ const FileSourceDnd: React.FC<Props> = ({ children }) => {
     }),
   });
 
-  // Use empty image as a drag preview so browsers don't draw it
-  // and we can draw whatever we want on the custom drag layer instead.
-  preview(getEmptyImage(), {
-    // IE fallback: specify that we'd rather screenshot the node
-    // when it already knows it's being dragged so we can hide it with CSS.
-    captureDraggingState: true,
-  });
+  // Disable the default drag preview by using an empty image.
+  useEffect(() => {
+    // Use empty image as a drag preview so browsers don't draw it
+    // and we can draw whatever we want on the custom drag layer instead.
+    preview(getEmptyImage(), {
+      // IE fallback: specify that we'd rather screenshot the node
+      // when it already knows it's being dragged so we can hide it with CSS.
+      captureDraggingState: true,
+    });
+  }, [preview]);
+  const { isDragging, ...rest } = collected;
 
   return (
-    <span ref={drag} {...collected}>
+    <span ref={drag} {...rest}>
       {children}
     </span>
   );

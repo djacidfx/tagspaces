@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2024-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2024-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,32 +16,33 @@
  *
  */
 
-import React, { createContext, useMemo, useState } from 'react';
+import React, { createContext, useEffect, useMemo, useState } from 'react';
 import { useSelector } from 'react-redux';
 import { getSearchFilter } from '-/reducers/app';
 import { TS } from '-/tagspaces.namespace';
 import { sortByCriteria } from '@tagspaces/tagspaces-common/misc';
-import { Pro } from '-/pro';
-import { PerspectiveIDs } from '-/perspectives';
 import { defaultSettings } from '-/perspectives/grid';
 import { useDirectoryContentContext } from '-/hooks/useDirectoryContentContext';
+import { usePerspectiveSettingsContext } from '-/hooks/usePerspectiveSettingsContext';
 
 type SortedDirContextData = {
   sortedDirContent: TS.FileSystemEntry[];
-  settings: TS.FolderSettings;
   sortBy: string;
   orderBy: null | boolean;
+  nativeDragModeEnabled: boolean;
   setSortBy: (sort: string) => void;
   setOrderBy: (isAsc: null | boolean) => void;
+  setNativeDragModeEnabled: (enabled: boolean) => void;
 };
 
 export const SortedDirContext = createContext<SortedDirContextData>({
   sortedDirContent: undefined,
-  settings: undefined,
   sortBy: undefined,
   orderBy: undefined,
-  setSortBy: () => {},
-  setOrderBy: () => {},
+  nativeDragModeEnabled: undefined,
+  setSortBy: undefined,
+  setOrderBy: undefined,
+  setNativeDragModeEnabled: undefined,
 });
 
 export type SortedDirContextProviderProps = {
@@ -51,13 +52,21 @@ export type SortedDirContextProviderProps = {
 export const SortedDirContextProvider = ({
   children,
 }: SortedDirContextProviderProps) => {
-  const { currentDirectoryEntries, directoryMeta, perspective } =
-    useDirectoryContentContext();
+  const { currentDirectoryEntries } = useDirectoryContentContext();
+  const { settings } = usePerspectiveSettingsContext();
   const searchFilter: string = useSelector(getSearchFilter);
-
-  const settings: TS.FolderSettings = useMemo(() => {
+  /*const settings: TS.FolderSettings = useMemo(() => {
     return getSettings(directoryMeta, perspective);
-  }, [directoryMeta, perspective]);
+  }, [directoryMeta, perspective]);*/
+
+  useEffect(() => {
+    if (settings.sortBy !== sortBy) {
+      setSortBy(settings.sortBy);
+    }
+    if (settings.orderBy !== orderBy) {
+      setOrderBy(settings.orderBy);
+    }
+  }, [settings]);
 
   const [sortBy, setSortBy] = useState<string>(
     settings && settings.sortBy ? settings.sortBy : defaultSettings.sortBy,
@@ -67,8 +76,10 @@ export const SortedDirContextProvider = ({
       ? settings.orderBy
       : defaultSettings.orderBy,
   );
+  const [nativeDragModeEnabled, setNativeDragModeEnabled] =
+    useState<boolean>(false);
 
-  function getSettings(meta, persp = PerspectiveIDs.GRID): TS.FolderSettings {
+  /*function getSettings(meta, persp = PerspectiveIDs.GRID): TS.FolderSettings {
     if (persp === PerspectiveIDs.UNSPECIFIED) {
       persp = PerspectiveIDs.GRID;
     }
@@ -83,17 +94,10 @@ export const SortedDirContextProvider = ({
       // loading settings for not Pro
       return JSON.parse(localStorage.getItem(defaultSettings.settingsKey));
     }
-  }
+  }*/
 
   const sortedDirContent = useMemo(() => {
     if (searchFilter) {
-      /*if (lastSearchTimestamp) {
-        return GlobalSearch.getInstance()
-          .getResults()
-          .filter(entry =>
-            entry.name.toLowerCase().includes(searchFilter.toLowerCase())
-          );
-      } else {*/
       return sortByCriteria(currentDirectoryEntries, sortBy, orderBy).filter(
         (entry) =>
           entry.name.toLowerCase().includes(searchFilter.toLowerCase()),
@@ -116,13 +120,14 @@ export const SortedDirContextProvider = ({
   const context = useMemo(() => {
     return {
       sortedDirContent,
-      settings,
       sortBy,
       orderBy,
       setSortBy,
       setOrderBy,
+      nativeDragModeEnabled,
+      setNativeDragModeEnabled,
     };
-  }, [sortedDirContent, settings, sortBy, orderBy]);
+  }, [sortedDirContent, sortBy, orderBy, nativeDragModeEnabled]);
 
   return (
     <SortedDirContext.Provider value={context}>

@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,13 +16,14 @@
  *
  */
 
-import React, { MutableRefObject, useEffect, useRef } from 'react';
+import React, { MutableRefObject, useEffect } from 'react';
 import { rgbToHex, useTheme } from '@mui/material/styles';
 import CloseIcon from '@mui/icons-material/Close';
-import useEventListener from '-/utils/useEventListener';
 import { useTranslation } from 'react-i18next';
 import { useDirectoryContentContext } from '-/hooks/useDirectoryContentContext';
 import { useOpenedEntryContext } from '-/hooks/useOpenedEntryContext';
+import { useFilePropertiesContext } from '-/hooks/useFilePropertiesContext';
+import AppConfig from '-/AppConfig';
 
 interface Props {
   isFullscreen?: boolean;
@@ -37,6 +38,7 @@ function FileView(props: Props) {
   const { i18n } = useTranslation();
   const theme = useTheme();
   const { openedEntry } = useOpenedEntryContext();
+  const { isEditMode } = useFilePropertiesContext();
   const {
     fileViewer,
     isFullscreen,
@@ -46,25 +48,22 @@ function FileView(props: Props) {
     eventID,
   } = props;
 
-  const { searchQuery } = useDirectoryContentContext();
-  const fileOpenerURL = useRef<string>(getFileOpenerURL());
+  const { searchQuery, isSearchMode } = useDirectoryContentContext();
 
   useEffect(() => {
-    fileOpenerURL.current = getFileOpenerURL();
-  }, [openedEntry]);
+    if (AppConfig.isElectron) {
+      window.electronIO.ipcRenderer.on('play-pause', () => {
+        // @ts-ignore
+        fileViewer?.current?.contentWindow?.togglePlay();
+      });
 
-  useEventListener('toggle-resume', () => {
-    if (
-      fileViewer &&
-      fileViewer.current &&
-      fileViewer.current.contentWindow &&
-      // @ts-ignore
-      fileViewer.current.contentWindow.togglePlay
-    ) {
-      // @ts-ignore
-      fileViewer.current.contentWindow.togglePlay();
+      return () => {
+        if (window.electronIO.ipcRenderer) {
+          window.electronIO.ipcRenderer.removeAllListeners('play-pause');
+        }
+      };
     }
-  });
+  }, []);
 
   function getFileOpenerURL(): string {
     if (openedEntry && openedEntry.path) {
@@ -93,9 +92,10 @@ function FileView(props: Props) {
         );
 
       const event = eventID ? '&eventID=' + eventID : '';
-      const extQuery = searchQuery.textQuery
-        ? '&query=' + encodeURIComponent(searchQuery.textQuery)
-        : '';
+      const extQuery =
+        searchQuery.textQuery && isSearchMode
+          ? '&query=' + encodeURIComponent(searchQuery.textQuery)
+          : '';
       const locale = '&locale=' + i18n.language;
       const theming =
         '&theme=' +
@@ -104,31 +104,24 @@ function FileView(props: Props) {
         extTextColor +
         extBgndColor;
 
-      if (openedEntry.editMode && openedEntry.editingExtensionPath) {
-        return (
-          openedEntry.editingExtensionPath +
-          '/index.html?file=' +
-          encodeURIComponent(
-            openedEntry.url ? openedEntry.url : openedEntry.path,
-          ) +
-          locale +
-          theming +
-          extQuery +
-          event +
-          '&edit=true'
-          // '&t=' + openedEntry.lmdt
-        );
+      const encrypted = openedEntry.isEncrypted ? '&encrypted=true' : '';
+      const getParams =
+        '/index.html?file=' +
+        encodeURIComponent(
+          openedEntry.url ? openedEntry.url : openedEntry.path,
+        ) +
+        locale +
+        theming +
+        extQuery +
+        event +
+        encrypted;
+
+      if (isEditMode && openedEntry.editingExtensionPath) {
+        return openedEntry.editingExtensionPath + getParams + '&edit=true';
       } else {
         return (
           openedEntry.viewingExtensionPath +
-          '/index.html?file=' +
-          encodeURIComponent(
-            openedEntry.url ? openedEntry.url : openedEntry.path,
-          ) +
-          locale +
-          theming +
-          extQuery +
-          event +
+          getParams +
           '&t=' +
           openedEntry.lmdt
         );
@@ -175,7 +168,8 @@ function FileView(props: Props) {
             zIndex: 3,
             border: 0,
           }}
-          src={fileOpenerURL.current}
+          allow="clipboard-write *"
+          src={getFileOpenerURL() /*fileOpenerURL.current*/}
           allowFullScreen
           sandbox="allow-same-origin allow-scripts allow-modals allow-downloads"
           id={'FileViewer' + eventID}
