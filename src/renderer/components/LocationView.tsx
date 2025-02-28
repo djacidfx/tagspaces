@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,40 +16,44 @@
  *
  */
 
-import React, { useRef } from 'react';
-import { useDispatch } from 'react-redux';
-import Tooltip from '-/components/Tooltip';
-import ListItem from '@mui/material/ListItem';
-import ListItemIcon from '@mui/material/ListItemIcon';
-import ListItemSecondaryAction from '@mui/material/ListItemSecondaryAction';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import { LocalLocationIcon, CloudLocationIcon } from '-/components/CommonIcons';
-import DefaultLocationIcon from '@mui/icons-material/Highlight';
-import { locationType } from '@tagspaces/tagspaces-common/misc';
 import AppConfig from '-/AppConfig';
-import { actions as AppActions, AppDispatch } from '../reducers/app';
-import PlatformIO from '../services/platform-facade';
-import TargetMoveFileBox from './TargetMoveFileBox';
-import DragItemTypes from './DragItemTypes';
+import { CloudLocationIcon, LocalLocationIcon } from '-/components/CommonIcons';
+import CustomDragLayer from '-/components/CustomDragLayer';
 import DirectoryTreeView, {
   DirectoryTreeViewRef,
 } from '-/components/DirectoryTreeView';
-import LocationContextMenu from '-/components/menus/LocationContextMenu';
-import { TS } from '-/tagspaces.namespace';
-import { classes, SidePanel } from '-/components/SidePanels.css';
-import { useTranslation } from 'react-i18next';
+import { SidePanel, classes } from '-/components/SidePanels.css';
+import TargetFileBox from '-/components/TargetFileBox';
+import Tooltip from '-/components/Tooltip';
+import TsIconButton from '-/components/TsIconButton';
+import { useEntryExistDialogContext } from '-/components/dialogs/hooks/useEntryExistDialogContext';
+import { useFileUploadDialogContext } from '-/components/dialogs/hooks/useFileUploadDialogContext';
 import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
-import { useNotificationContext } from '-/hooks/useNotificationContext';
-import { useIOActionsContext } from '-/hooks/useIOActionsContext';
-import { useSelectedEntriesContext } from '-/hooks/useSelectedEntriesContext';
 import { useDirectoryContentContext } from '-/hooks/useDirectoryContentContext';
+import { useIOActionsContext } from '-/hooks/useIOActionsContext';
+import { useNotificationContext } from '-/hooks/useNotificationContext';
+import { usePerspectiveActionsContext } from '-/hooks/usePerspectiveActionsContext';
+import { useSelectedEntriesContext } from '-/hooks/useSelectedEntriesContext';
+import { TS } from '-/tagspaces.namespace';
+import { CommonLocation } from '-/utils/CommonLocation';
+import DefaultLocationIcon from '@mui/icons-material/Highlight';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import { ListItemText } from '@mui/material';
+import ListItem from '@mui/material/ListItem';
+import ListItemIcon from '@mui/material/ListItemIcon';
+import Typography from '@mui/material/Typography';
+import { locationType } from '@tagspaces/tagspaces-common/misc';
+import React, { useRef } from 'react';
+import { NativeTypes } from 'react-dnd-html5-backend';
+import { useTranslation } from 'react-i18next';
+import { useDispatch } from 'react-redux';
+import { actions as AppActions, AppDispatch } from '../reducers/app';
+import DragItemTypes from './DragItemTypes';
+import TargetMoveFileBox from './TargetMoveFileBox';
 
 interface Props {
-  location: TS.Location;
+  location: CommonLocation;
   hideDrawer?: () => void;
-  setEditLocationDialogOpened: (open: boolean) => void;
   setDeleteLocationDialogOpened: (open: boolean) => void;
 }
 
@@ -57,26 +61,25 @@ function LocationView(props: Props) {
   const { t } = useTranslation();
 
   const { moveFiles, uploadFiles } = useIOActionsContext();
+  const { openFileUploadDialog } = useFileUploadDialogContext();
   const {
     openLocation,
-    currentLocation,
+    findLocation,
     readOnlyMode,
     setSelectedLocation,
     setLocationDirectoryContextMenuAnchorEl,
   } = useCurrentLocationContext();
+  const { handleEntryExist, openEntryExistDialog } =
+    useEntryExistDialogContext();
+  const { setActions } = usePerspectiveActionsContext();
   const { setSelectedEntries } = useSelectedEntriesContext();
   const { currentLocationPath, openDirectory } = useDirectoryContentContext();
   const { showNotification } = useNotificationContext();
   const directoryTreeRef = useRef<DirectoryTreeViewRef>(null);
 
   const dispatch: AppDispatch = useDispatch();
-
-  const {
-    location,
-    hideDrawer,
-    setEditLocationDialogOpened,
-    setDeleteLocationDialogOpened,
-  } = props;
+  const currentLocation = findLocation();
+  const { location, hideDrawer } = props;
   const isCloudLocation = location.type === locationType.TYPE_CLOUD;
 
   const handleLocationIconClick = (
@@ -92,20 +95,17 @@ function LocationView(props: Props) {
   const handleLocationClick = () => {
     if (currentLocation && location.uuid === currentLocation.uuid) {
       // the same location click
-      openDirectory(currentLocationPath); //PlatformIO.getLocationPath(location));
+      openDirectory(currentLocationPath).then(() => {
+        const action: TS.PerspectiveActions = { action: 'reload' };
+        setActions(action);
+      });
     } else {
-      // this.directoryTreeRef[location.uuid].loadSubDir(location, 1);
-      // setSelectedEntries([]);
       openLocation(location);
       if (hideDrawer) {
         hideDrawer();
       }
     }
   };
-
-  /*const closeLocationTree = () => {
-    directoryTreeRef.current.closeLocation();
-  };*/
 
   const handleLocationContextMenuClick = (event: any, chosenLocation) => {
     event.preventDefault();
@@ -139,14 +139,6 @@ function LocationView(props: Props) {
         showNotification(t('core:dndDisabledReadOnlyMode'), 'error', true);
         return;
       }
-      if (!AppConfig.isWin && !path.startsWith('/')) {
-        showNotification(t('Moving file not possible'), 'error', true);
-        return;
-      }
-      if (AppConfig.isWin && !path.substr(1).startsWith(':')) {
-        showNotification(t('Moving file not possible'), 'error', true);
-        return;
-      }
       const targetLocation = item.targetLocation;
       let targetPath = targetLocation ? targetLocation.path : undefined;
       if (targetPath === undefined) {
@@ -156,31 +148,44 @@ function LocationView(props: Props) {
       if (targetPath !== undefined && targetLocation !== undefined) {
         // TODO handle monitor -> isOver and change folder icon
         console.log('Dropped files: ' + path);
-        if (targetLocation.type === locationType.TYPE_CLOUD) {
-          // TODO Webdav
-          PlatformIO.enableObjectStoreSupport(targetLocation)
-            .then(() => {
-              dispatch(AppActions.resetProgress());
-              dispatch(AppActions.toggleUploadDialog());
-              return uploadFiles(arrPath, targetPath, onUploadProgress).catch(
-                (error) => {
-                  console.log('uploadFiles', error);
-                },
-              );
-            })
-            .catch((error) => {
-              console.log('enableObjectStoreSupport', error);
-            });
+        if (targetLocation.type !== currentLocation.type) {
+          //locationType.TYPE_CLOUD) {
+          dispatch(AppActions.resetProgress());
+          openFileUploadDialog(targetPath);
+          return uploadFiles(
+            arrPath,
+            targetPath,
+            onUploadProgress,
+            true,
+            false,
+            targetLocation.uuid,
+          ).catch((error) => {
+            console.log('uploadFiles', error);
+          });
         } else if (targetLocation.type === locationType.TYPE_LOCAL) {
-          PlatformIO.disableObjectStoreSupport();
-          moveFiles(arrPath, targetPath);
+          handleEntryExist(
+            selectedEntries,
+            targetPath,
+            targetLocation.uuid,
+          ).then((exist) => {
+            if (exist) {
+              openEntryExistDialog(exist, () => {
+                moveFiles(arrPath, targetPath, targetLocation.uuid);
+              });
+            } else {
+              moveFiles(arrPath, targetPath, targetLocation.uuid);
+            }
+          });
+        } else {
+          showNotification(t('Moving file not possible'), 'error', true);
+          return;
         }
         setSelectedEntries([]);
       }
     }
   };
 
-  let locationNameTitle = currentLocationPath; //PlatformIO.getLocationPath(location);
+  let locationNameTitle = location?.path;
   if (isCloudLocation && location.bucketName) {
     if (location.endpointURL) {
       locationNameTitle = location.endpointURL + ' - ' + location.bucketName;
@@ -190,96 +195,94 @@ function LocationView(props: Props) {
   }
 
   const LocationTitle = (
-    <Tooltip title={locationNameTitle}>
-      <div
+    <div
+      style={{
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        maxWidth: 240,
+      }}
+    >
+      <Typography
+        variant="inherit"
         style={{
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-          maxWidth: 240,
+          paddingLeft: 5,
+          paddingRight: 5,
         }}
+        className={classes.header}
+        data-tid="locationTitleElement"
+        noWrap
       >
-        <Typography
-          variant="inherit"
-          style={{
-            paddingLeft: 5,
-            paddingRight: 5,
-          }}
-          className={classes.header}
-          data-tid="locationTitleElement"
-          noWrap
-        >
-          {location.name}
-        </Typography>
-      </div>
-    </Tooltip>
+        <Tooltip title={locationNameTitle}>{location.name}</Tooltip>
+      </Typography>
+    </div>
   );
-
+  const { FILE } = NativeTypes;
   return (
-    /* <div key={location.uuid}> */
     <SidePanel>
-      {/*{locationDirectoryContextMenuAnchorEl && (
-        <LocationContextMenu
-          setEditLocationDialogOpened={setEditLocationDialogOpened}
-          setDeleteLocationDialogOpened={setDeleteLocationDialogOpened}
-          closeLocationTree={closeLocationTree}
-        />
-      )}*/}
-      <ListItem
-        data-tid={'location_' + location.name.replace(/ /g, '_')}
-        className={
-          currentLocation && currentLocation.uuid === location.uuid
-            ? classes.listItemSelected
-            : classes.listItem
-        }
-        onClick={handleLocationClick}
-        onContextMenu={(event) =>
-          handleLocationContextMenuClick(event, location)
-        }
+      <TargetFileBox
+        accepts={[FILE]}
+        directoryPath={location.path}
+        locationId={location.uuid}
       >
-        <ListItemIcon
-          // onClick={(e) => {
-          //   e.preventDefault();
-          //   this.loadSubDirectories(location, 1);
-          // }}
-          style={{
-            minWidth: 'auto',
-            cursor: 'pointer',
-          }}
-          onClick={handleLocationIconClick}
+        <CustomDragLayer />
+        <ListItem
+          data-tid={'location_' + location.name.replace(/ /g, '_')}
+          className={
+            currentLocation && currentLocation.uuid === location.uuid
+              ? classes.listItemSelected
+              : classes.listItem
+          }
+          onClick={handleLocationClick}
+          onContextMenu={(event) =>
+            handleLocationContextMenuClick(event, location)
+          }
         >
-          <Tooltip title={t('clickToExpand')}>
-            {isCloudLocation ? (
-              <CloudLocationIcon
-                style={{
-                  cursor: 'pointer',
-                }}
-                className={classes.icon}
-              />
-            ) : (
-              <LocalLocationIcon
-                style={{
-                  cursor: 'pointer',
-                }}
-                className={classes.icon}
-              />
-            )}
-          </Tooltip>
-        </ListItemIcon>
-        {isCloudLocation && !AppConfig.isElectron ? (
-          <>{LocationTitle}</>
-        ) : (
-          <TargetMoveFileBox
-            accepts={[DragItemTypes.FILE]}
-            onDrop={handleFileMoveDrop}
-            targetPath={currentLocationPath} //PlatformIO.getLocationPath(location)}
-            targetLocation={location}
+          <ListItemIcon
+            style={{
+              minWidth: 'auto',
+              cursor: 'pointer',
+            }}
+            onClick={handleLocationIconClick}
           >
-            {LocationTitle}
-          </TargetMoveFileBox>
-        )}
-        <ListItemSecondaryAction>
-          <IconButton
+            <Tooltip title={t('clickToExpand')}>
+              {isCloudLocation ? (
+                <CloudLocationIcon
+                  style={{
+                    cursor: 'pointer',
+                  }}
+                  className={classes.icon}
+                />
+              ) : (
+                <LocalLocationIcon
+                  style={{
+                    cursor: 'pointer',
+                  }}
+                  className={classes.icon}
+                />
+              )}
+            </Tooltip>
+          </ListItemIcon>
+          <ListItemText>
+            {isCloudLocation && !AppConfig.isElectron ? (
+              <>{LocationTitle}</>
+            ) : (
+              <TargetMoveFileBox
+                accepts={[DragItemTypes.FILE]}
+                onDrop={handleFileMoveDrop}
+                targetPath={currentLocationPath}
+                targetLocation={location}
+              >
+                {LocationTitle}
+              </TargetMoveFileBox>
+            )}
+          </ListItemText>
+          {location.isDefault && (
+            <Tooltip title={t('core:thisIsStartupLocation')}>
+              <DefaultLocationIcon data-tid="startupIndication" />
+            </Tooltip>
+          )}
+          <TsIconButton
             aria-label={t('core:options')}
             aria-haspopup="true"
             edge="end"
@@ -288,17 +291,11 @@ function LocationView(props: Props) {
             onContextMenu={(event) =>
               handleLocationContextMenuClick(event, location)
             }
-            size="large"
           >
-            {location.isDefault && (
-              <Tooltip title={t('core:thisIsStartupLocation')}>
-                <DefaultLocationIcon data-tid="startupIndication" />
-              </Tooltip>
-            )}
             <MoreVertIcon />
-          </IconButton>
-        </ListItemSecondaryAction>
-      </ListItem>
+          </TsIconButton>
+        </ListItem>
+      </TargetFileBox>
       <DirectoryTreeView
         key={'tree_' + location.uuid}
         ref={directoryTreeRef}

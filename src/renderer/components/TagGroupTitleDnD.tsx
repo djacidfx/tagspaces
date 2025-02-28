@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,17 +16,19 @@
  *
  */
 
-import React, { useRef } from 'react';
-import Typography from '@mui/material/Typography';
-import IconButton from '@mui/material/IconButton';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
+import DragItemTypes from '-/components/DragItemTypes';
+import { SidePanel, classes } from '-/components/SidePanels.css';
+import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
+import { TS } from '-/tagspaces.namespace';
+import { CommonLocation } from '-/utils/CommonLocation';
 import ArrowDownIcon from '@mui/icons-material/KeyboardArrowDown';
 import ArrowRightIcon from '@mui/icons-material/KeyboardArrowRight';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
+import Grid from '@mui/material/Grid2';
+import IconButton from '@mui/material/IconButton';
+import Typography from '@mui/material/Typography';
+import React, { useRef } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
-import Grid from '@mui/material/Grid';
-import { TS } from '-/tagspaces.namespace';
-import DragItemTypes from '-/components/DragItemTypes';
-import { classes, SidePanel } from '-/components/SidePanels.css';
 
 interface Props {
   index: number;
@@ -37,7 +39,6 @@ interface Props {
   ) => void;
   toggleTagGroup: (uuid: string) => void;
   moveTagGroup: (tagGroupUuid: TS.Uuid, position: number) => void;
-  locations: Array<TS.Location>;
   tagGroupCollapsed: Array<string>;
   isReadOnly: boolean;
 }
@@ -49,9 +50,9 @@ function TagGroupTitleDnD(props: Props) {
     handleTagGroupMenu,
     moveTagGroup,
     toggleTagGroup,
-    locations,
     isReadOnly,
   } = props;
+  const { findLocation } = useCurrentLocationContext();
   const tagGroupRef = useRef<HTMLSpanElement>(null);
 
   const [, drag] = useDrag({
@@ -113,9 +114,7 @@ function TagGroupTitleDnD(props: Props) {
 
   function getLocationName(locationId: string) {
     if (locationId) {
-      const location: TS.Location = locations.find(
-        (l) => l.uuid === locationId,
-      );
+      const location: CommonLocation = findLocation(locationId);
       if (location) {
         return ' (' + location.name + ')';
       }
@@ -136,7 +135,7 @@ function TagGroupTitleDnD(props: Props) {
         alignContent="center"
         style={{ flexWrap: 'nowrap' }}
       >
-        <Grid item xs={2} style={{ maxWidth: 40 }}>
+        <Grid size={2} style={{ maxWidth: 40 }}>
           <IconButton
             style={{ minWidth: 'auto', padding: 7 }}
             onClick={(event: any) => handleTagGroupTitleClick(event, tagGroup)}
@@ -145,7 +144,7 @@ function TagGroupTitleDnD(props: Props) {
             {tagGroup.expanded ? <ArrowDownIcon /> : <ArrowRightIcon />}
           </IconButton>
         </Grid>
-        <Grid item xs={8} style={{ alignSelf: 'center' }}>
+        <Grid size={8} style={{ alignSelf: 'center' }}>
           <Typography
             variant="inherit"
             className={classes.header}
@@ -178,7 +177,7 @@ function TagGroupTitleDnD(props: Props) {
             )}
           </Typography>
         </Grid>
-        <Grid item xs={2} style={{ textAlign: 'end' }}>
+        <Grid size={2} style={{ textAlign: 'end' }}>
           {!isReadOnly && (
             <IconButton
               style={{ minWidth: 'auto', padding: 7 }}

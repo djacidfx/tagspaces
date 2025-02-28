@@ -4,13 +4,11 @@ import {
   extractFileName,
   extractDirectoryName,
 } from '@tagspaces/tagspaces-common/paths';
-import PlatformIO from '-/services/platform-facade';
 import {
   ListItemIcon,
   ListItemText,
   Menu,
   MenuItem,
-  MenuList,
   Divider,
 } from '@mui/material';
 import { useSelector } from 'react-redux';
@@ -40,23 +38,32 @@ import { useOpenedEntryContext } from '-/hooks/useOpenedEntryContext';
 import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
 import { useNotificationContext } from '-/hooks/useNotificationContext';
 import { useIOActionsContext } from '-/hooks/useIOActionsContext';
+import {
+  createNewInstance,
+  openDirectoryMessage,
+  openFileMessage,
+} from '-/services/utils-io';
+import TsMenuList from '-/components/TsMenuList';
+import { useFullScreenContext } from '-/hooks/useFullScreenContext';
 
 interface Props {
   anchorEl: null | HTMLElement;
   handleClose: () => void;
   startClosingEntry: (event) => void;
-  toggleFullScreen: () => void;
   reloadDocument: () => void;
+  fileViewerContainer: HTMLDivElement;
 }
 
 function EntryContainerMenu(props: Props) {
   const {
     anchorEl,
     handleClose,
-    toggleFullScreen,
     reloadDocument,
     startClosingEntry,
+    fileViewerContainer,
   } = props;
+
+  const { toggleFullScreen } = useFullScreenContext();
   const { openedEntry } = useOpenedEntryContext();
   const { t } = useTranslation();
   // const theme = useTheme();
@@ -67,94 +74,16 @@ function EntryContainerMenu(props: Props) {
     sharingParentFolderLink,
   } = useOpenedEntryContext();
   const keyBindings = useSelector(getKeyBindingObject);
-  const { readOnlyMode } = useCurrentLocationContext();
-  const { deleteFile } = useIOActionsContext();
-  const { showNotification } = useNotificationContext();
+  const { findLocation, readOnlyMode } = useCurrentLocationContext();
+  const { deleteFile, downloadFsEntry } = useIOActionsContext();
+  //const { showNotification } = useNotificationContext();
   const desktopMode = useSelector(isDesktopMode);
   const warningOpeningFilesExternally = useSelector(
     getWarningOpeningFilesExternally,
   );
-
   const [isDeleteEntryModalOpened, setDeleteEntryModalOpened] =
     useState<boolean>(false);
-
-  const downloadCordova = (uri, filename) => {
-    const { Downloader } = window.plugins;
-
-    const downloadSuccessCallback = (result) => {
-      // result is an object
-      /* {
-        path: "file:///storage/sdcard0/documents/My Pdf.pdf", // Returns full file path
-        file: "My Pdf.pdf", // Returns Filename
-        folder: "documents" // Returns folder name
-      } */
-      console.log(result.file); // My Pdf.pdf
-    };
-
-    const downloadErrorCallback = (error) => {
-      console.log(error);
-    };
-
-    const options = {
-      title: 'Downloading File:' + filename, // Download Notification Title
-      url: uri, // File Url
-      path: filename, // The File Name with extension
-      description: 'The file is downloading', // Download description Notification String
-      visible: true, // This download is visible and shows in the notifications while in progress and after completion.
-      folder: 'documents', // Folder to save the downloaded file, if not exist it will be created
-    };
-
-    Downloader.download(
-      options,
-      downloadSuccessCallback,
-      downloadErrorCallback,
-    );
-  };
-
-  function downloadFile() {
-    const entryName = `${baseName(
-      openedEntry.path,
-      PlatformIO.getDirSeparator(),
-    )}`;
-    const fileName = extractFileName(entryName, PlatformIO.getDirSeparator());
-
-    if (AppConfig.isCordova) {
-      if (openedEntry.url) {
-        downloadCordova(openedEntry.url, entryName);
-      } else {
-        console.log('Can only download HTTP/HTTPS URIs');
-        showNotification(t('core:cantDownloadLocalFile'));
-      }
-    } else {
-      const downloadLink = document.getElementById('downloadFile');
-      if (downloadLink) {
-        if (AppConfig.isWeb) {
-          // eslint-disable-next-line no-restricted-globals
-          const { protocol } = location;
-          // eslint-disable-next-line no-restricted-globals
-          const { hostname } = location;
-          // eslint-disable-next-line no-restricted-globals
-          const { port } = location;
-          const link = `${protocol}//${hostname}${
-            port !== '' ? `:${port}` : ''
-          }/${openedEntry.path}`;
-          downloadLink.setAttribute('href', link);
-        } else {
-          downloadLink.setAttribute('href', `file:///${openedEntry.path}`);
-        }
-
-        if (openedEntry.url) {
-          // mostly the s3 case
-          downloadLink.setAttribute('target', '_blank');
-          downloadLink.setAttribute('href', openedEntry.url);
-        }
-
-        downloadLink.setAttribute('download', fileName); // works only for same origin
-        downloadLink.click();
-      }
-    }
-    handleClose();
-  }
+  const currentLocation = findLocation();
 
   const navigateToFolder = () => {
     if (openedEntry.isFile) {
@@ -166,22 +95,21 @@ function EntryContainerMenu(props: Props) {
   };
 
   const openInNewWindow = () => {
-    PlatformIO.createNewInstance(window.location.href);
+    createNewInstance(window.location.href);
     handleClose();
   };
 
   const shareFile = (filePath: string) => {
-    PlatformIO.shareFiles([filePath]);
+    currentLocation.shareFiles([filePath]);
     handleClose();
   };
 
   const openNatively = () => {
     if (openedEntry.path) {
       if (openedEntry.isFile) {
-        PlatformIO.openFile(openedEntry.path, warningOpeningFilesExternally);
-        //dispatch(AppActions.openFileNatively(openedEntry.path));
+        openFileMessage(openedEntry.path, warningOpeningFilesExternally);
       } else {
-        PlatformIO.openDirectory(openedEntry.path);
+        openDirectoryMessage(openedEntry.path);
       }
     }
     handleClose();
@@ -211,7 +139,37 @@ function EntryContainerMenu(props: Props) {
         key={'downloadFileKey'}
         data-tid="downloadFileTID"
         aria-label={t('core:downloadFile')}
-        onClick={() => downloadFile()}
+        onClick={() => {
+          downloadFsEntry(openedEntry);
+          /*if (openedEntry.isEncrypted) {
+            currentLocation
+              .getFileContentPromise(openedEntry.path, 'arraybuffer')
+              .then((arrayBuffer) => {
+                const url = window.URL || window.webkitURL;
+                const openedEntryUrl = url.createObjectURL(
+                  new Blob([arrayBuffer]),
+                );
+                const downloadResult = downloadFile(
+                  openedEntry.path,
+                  openedEntryUrl,
+                  currentLocation?.getDirSeparator(),
+                );
+                if (downloadResult === -1) {
+                  showNotification(t('core:cantDownloadLocalFile'));
+                }
+              });
+          } else {
+            const downloadResult = downloadFile(
+              openedEntry.path,
+              openedEntry.url,
+              currentLocation?.getDirSeparator(),
+            );
+            if (downloadResult === -1) {
+              showNotification(t('core:cantDownloadLocalFile'));
+            }
+          }*/
+          handleClose();
+        }}
       >
         <ListItemIcon>
           <DownloadIcon />
@@ -226,7 +184,7 @@ function EntryContainerMenu(props: Props) {
         data-tid="fileContainerSwitchToFullScreen"
         aria-label={t('core:switchToFullscreen')}
         onClick={() => {
-          toggleFullScreen();
+          toggleFullScreen(fileViewerContainer);
           handleClose();
         }}
       >
@@ -321,10 +279,11 @@ function EntryContainerMenu(props: Props) {
     }
     if (
       !(
-        PlatformIO.haveObjectStoreSupport() ||
-        PlatformIO.haveWebDavSupport() ||
+        currentLocation?.haveObjectStoreSupport() ||
+        currentLocation?.haveWebDavSupport() ||
         AppConfig.isWeb
-      )
+      ) &&
+      !(AppConfig.isAndroid && !openedEntry.isFile)
     ) {
       menuItems.push(
         <MenuItem
@@ -336,7 +295,13 @@ function EntryContainerMenu(props: Props) {
           <ListItemIcon>
             <OpenNativelyIcon />
           </ListItemIcon>
-          <ListItemText primary={t('core:openFileExternally')} />
+          <ListItemText
+            primary={t(
+              openedEntry.isFile
+                ? 'core:openFileNatively'
+                : 'core:openDirectoryExternally',
+            )}
+          />
         </MenuItem>,
       );
     }
@@ -390,8 +355,8 @@ function EntryContainerMenu(props: Props) {
     }
     if (
       !(
-        PlatformIO.haveObjectStoreSupport() ||
-        PlatformIO.haveWebDavSupport() ||
+        currentLocation?.haveObjectStoreSupport() ||
+        currentLocation?.haveWebDavSupport() ||
         AppConfig.isWeb
       )
     ) {
@@ -467,7 +432,7 @@ function EntryContainerMenu(props: Props) {
   );
 
   const entryName = openedEntry.path
-    ? extractDirectoryName(openedEntry.path, PlatformIO.getDirSeparator())
+    ? extractDirectoryName(openedEntry.path, currentLocation?.getDirSeparator())
     : '';
 
   return (
@@ -486,7 +451,7 @@ function EntryContainerMenu(props: Props) {
           horizontal: 'left',
         }}
       >
-        <MenuList sx={{ minWidth: 300 }}>{menuItems}</MenuList>
+        <TsMenuList sx={{ minWidth: 300 }}>{menuItems}</TsMenuList>
       </Menu>
       {isDeleteEntryModalOpened && (
         <ConfirmDialog

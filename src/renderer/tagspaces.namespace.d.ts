@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,6 +16,9 @@
  *
  */
 
+import { ScopeType } from '-/components/SearchOptions';
+import AWS from 'aws-sdk';
+
 export namespace TS {
   interface Location {
     uuid: string;
@@ -25,17 +28,12 @@ export namespace TS {
     authType?: string; // none,password,digest,token
     username?: string;
     password?: string;
-    accessKeyId?: string;
-    secretAccessKey?: string;
-    sessionToken?: string;
-    bucketName?: string;
-    region?: string;
     paths?: Array<string>; // deprecated
     path?: string;
-    endpointURL?: string;
-    children?: Array<any>;
+    //children?: Array<any>;
     perspective?: string; // id of the perspective
-    creationDate?: string;
+    creationDate?: number;
+    lastEditedDate?: number;
     isDefault: boolean;
     isReadOnly?: boolean;
     isNotEditable?: boolean;
@@ -47,6 +45,23 @@ export namespace TS {
     maxLoops?: number;
     persistTagsInSidecarFile?: boolean;
     ignorePatternPaths?: Array<string>;
+    autoOpenedFilename?: string;
+  }
+
+  interface S3Location extends Location {
+    accessKeyId?: string;
+    secretAccessKey?: string;
+    sessionToken?: string;
+    bucketName?: string;
+    region?: string;
+    endpointURL?: string;
+    encryptionKey?: string;
+    s3API?: AWS.S3;
+  }
+
+  interface FileExistenceCheck {
+    promise: Promise<boolean>;
+    path: string;
   }
 
   interface Extension {
@@ -65,6 +80,7 @@ export namespace TS {
     viewer: string;
     editor?: string;
     color?: string;
+    extensionExternalPath?: string;
   }
 
   interface DirProp {
@@ -84,7 +100,7 @@ export namespace TS {
     tagsNOT?: Array<Tag>;
     lastModified?: string;
     fileSize?: string;
-    searchBoxing?: 'location' | 'folder' | 'global';
+    searchBoxing?: ScopeType;
     searchType?: 'fuzzy' | 'semistrict' | 'strict';
     forceIndexing?: boolean;
     currentDirectory?: string;
@@ -99,12 +115,15 @@ export namespace TS {
   }
 
   type Uuid = string;
+  export type ActionSource = 'local' | 'upload' | 'thumbgen' | 'fsWatcher';
+  export type FileType = 'txt' | 'md' | 'html' | 'url';
 
   interface EditAction {
-    action: 'add' | 'delete' | 'update' | 'move';
+    action: 'add' | 'delete' | 'update' | 'move' | 'edit';
     entry: TS.FileSystemEntry;
     oldEntryPath?: string;
     open?: boolean;
+    source?: ActionSource;
   }
 
   interface EditMetaAction {
@@ -113,9 +132,19 @@ export namespace TS {
       | 'autoSaveChange'
       | 'descriptionChange'
       | 'thumbChange'
+      | 'thumbGenerate'
       | 'bgdImgChange'
       | 'bgdColorChange';
-    entry: TS.FileSystemEntry;
+    entry?: TS.FileSystemEntry;
+  }
+
+  interface PerspectiveActions {
+    action: 'openNext' | 'openPrevious' | 'reload';
+  }
+
+  interface KanBanMetaActions {
+    action: 'directoryVisibilityChange';
+    meta: TS.FileSystemEntryMeta;
   }
 
   interface Tag {
@@ -128,7 +157,7 @@ export namespace TS {
     icon?: string;
     description?: string;
     style?: string;
-    path?: string; // needed for geo tagging should be removed
+    //path?: string; // needed for geo tagging should be removed
     modified_date?: number;
     functionality?: string;
     keyBinding?: string;
@@ -159,15 +188,40 @@ export namespace TS {
     name: string;
     isFile: boolean;
     isNewFile?: boolean;
+    locationID?: string;
     //isAutoSaveEnabled?: boolean; // common with OpenedEntry
     extension?: string;
     textContent?: string;
     tags?: TS.Tag[];
+    isEncrypted?: boolean;
     size: number;
     lmdt: number;
     path: string;
     url?: string;
     meta?: FileSystemEntryMeta;
+    links?: Link[];
+  }
+
+  type LinkType = 'url' | 'email' | 'tslink' | 'hashtag' | 'mention';
+
+  interface Link {
+    /**
+     * The type of entity found.
+     */
+    type: LinkType;
+    /**
+     * Should be the value of this links `href` attribute.
+     */
+    href: string;
+    /**
+     * Entry id if link from type tslink and id is available
+     * @deprecated
+     */
+    tseid: string;
+    /**
+     * The original entity substring.
+     */
+    value?: string;
   }
 
   interface FileSystemEntryMeta {
@@ -189,13 +243,19 @@ export namespace TS {
   }
 
   interface OpenedEntry extends FileSystemEntry {
-    locationId?: string;
     viewingExtensionPath: string;
     viewingExtensionId: string;
     editingExtensionPath?: string;
     editingExtensionId?: string;
-    editMode?: boolean;
+    //editMode?: boolean; // TODO move in FilePropertiesContextProvider
     focused?: boolean; // TODO make it mandatory once support for multiple files is added
+  }
+
+  interface BroadcastMessage {
+    // unique ID for the tab instance
+    uuid: string;
+    type: string;
+    payload?: any;
   }
 
   interface CustomOrder {
@@ -214,6 +274,41 @@ export namespace TS {
 
   type ThumbnailMode = 'contain' | 'cover' | 'fill' | 'none' | 'scale-down';
 
+  type BookmarksContextData = {
+    bookmarks: TS.BookmarkItem[];
+    setBookmark: (filePath: string, url: string) => void;
+    haveBookmark: (filePath: string) => boolean;
+    delAllBookmarks: () => void;
+    delBookmark: (filePath: string) => void;
+  };
+
+  type extractOptions = {
+    EXIFGeo?: boolean;
+    EXIFDateTime?: boolean;
+    IPTCDescription?: boolean;
+    IPTCTags?: boolean;
+  };
+
+  type ExifExtractionContextData = {
+    extractAndSaveContent: (options: extractOptions) => Promise<boolean>;
+  };
+
+  type HistoryContextData = {
+    fileOpenHistory: TS.HistoryItem[];
+    folderOpenHistory: TS.HistoryItem[];
+    fileEditHistory: TS.HistoryItem[];
+    searchHistory: TS.HistoryItem[];
+    saveHistory: (key, historyItem: TS.HistoryItem, limit) => void;
+    delAllHistory: (key) => void;
+    delHistory: (key, creationTimeStamp) => void;
+    //openItem: (item: TS.HistoryItem) => void;
+  };
+
+  type KanBanImportDialogContextData = {
+    openKanBanImportDialog: () => void;
+    closeKanBanImportDialog: () => void;
+  };
+
   interface EditedEntryPath {
     action: EditedEntryAction;
     path: string;
@@ -227,7 +322,7 @@ export namespace TS {
     path: string;
     url: string;
     lid: string;
-    creationTimeStamp: number;
+    creationTimeStamp?: number;
     searchQuery?: TS.SearchQuery;
   }
 

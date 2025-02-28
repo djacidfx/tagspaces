@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,12 +16,10 @@
  *
  */
 
-import React from 'react';
-import { useSelector } from 'react-redux';
-import MoreVertIcon from '@mui/icons-material/MoreVert';
-import RemoveTagIcon from '@mui/icons-material/Close';
-import { TS } from '-/tagspaces.namespace';
 import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
+import { TS } from '-/tagspaces.namespace';
+import RemoveTagIcon from '@mui/icons-material/Close';
+import MoreVertIcon from '@mui/icons-material/MoreVert';
 
 interface Props {
   tag: TS.Tag;
@@ -42,7 +40,7 @@ function TagContainerMenu(props: Props) {
   return tagMode === 'remove' ? (
     deleteIcon || (
       <RemoveTagIcon
-        data-tid={'tagRemoveButton_' + tag.title.replace(/ /g, '_')}
+        data-tid={'tagRemoveButton_' + tag.title?.replace(/ /g, '_')}
         style={{
           color: tag.textcolor,
           fontSize: 20,
@@ -54,13 +52,12 @@ function TagContainerMenu(props: Props) {
     )
   ) : (
     <MoreVertIcon
-      data-tid={'tagMoreButton_' + tag.title.replace(/ /g, '_')}
+      data-tid={'tagMoreButton_' + tag.title?.replace(/ /g, '_')}
       style={{
         color: tag.textcolor,
         marginLeft: -5,
         marginRight: -5,
         height: 20,
-        top: 0,
       }}
     />
   );

@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2023-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2023-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,48 +16,47 @@
  *
  */
 
-import React, { useMemo } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { useTheme, styled } from '@mui/material/styles';
-import classNames from 'classnames';
-import Grid from '@mui/material/Grid';
-import Typography from '@mui/material/Typography';
-import Paper from '@mui/material/Paper';
-import Tooltip from '-/components/Tooltip';
-import IconButton from '@mui/material/IconButton';
+import AppConfig from '-/AppConfig';
 import {
+  FolderOutlineIcon,
+  MoreMenuIcon,
   SelectedIcon,
   UnSelectedIcon,
-  FolderOutlineIcon,
 } from '-/components/CommonIcons';
-import {
-  formatFileSize,
-  formatDateTime,
-} from '@tagspaces/tagspaces-common/misc';
-import {
-  extractTagsAsObjects,
-  extractTitle,
-} from '@tagspaces/tagspaces-common/paths';
-import AppConfig from '-/AppConfig';
+import TagContainer from '-/components/TagContainer';
+import TagContainerDnd from '-/components/TagContainerDnd';
+import TagsPreview from '-/components/TagsPreview';
+import Tooltip from '-/components/Tooltip';
+import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
+import { usePerspectiveSettingsContext } from '-/hooks/usePerspectiveSettingsContext';
+import { useSelectedEntriesContext } from '-/hooks/useSelectedEntriesContext';
+import { useTaggingActionsContext } from '-/hooks/useTaggingActionsContext';
+import { getSupportedFileTypes, isReorderTags } from '-/reducers/settings';
+import i18n from '-/services/i18n';
 import {
   findBackgroundColorForFolder,
   findColorForEntry,
   getDescriptionPreview,
 } from '-/services/utils-io';
-import TagContainerDnd from '-/components/TagContainerDnd';
-import TagContainer from '-/components/TagContainer';
-import TagsPreview from '-/components/TagsPreview';
-import PlatformIO from '-/services/platform-facade';
 import { TS } from '-/tagspaces.namespace';
-import { actions as AppActions, AppDispatch } from '-/reducers/app';
-import { getSupportedFileTypes, isReorderTags } from '-/reducers/settings';
-import { defaultSettings } from '../index';
+import Grid from '@mui/material/Grid2';
+import IconButton from '@mui/material/IconButton';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+import { styled, useTheme } from '@mui/material/styles';
+import {
+  formatDateTime,
+  formatFileSize,
+} from '@tagspaces/tagspaces-common/misc';
+import {
+  extractTagsAsObjects,
+  extractTitle,
+} from '@tagspaces/tagspaces-common/paths';
+import classNames from 'classnames';
+import { useMemo } from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTaggingActionsContext } from '-/hooks/useTaggingActionsContext';
-import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
-import { useSelectedEntriesContext } from '-/hooks/useSelectedEntriesContext';
-import { usePerspectiveSettingsContext } from '-/hooks/usePerspectiveSettingsContext';
-import i18n from '-/services/i18n';
+import { useSelector } from 'react-redux';
+import { defaultSettings } from '../index';
 
 const PREFIX = 'RowStyles';
 export const classes = {
@@ -93,7 +92,11 @@ interface Props {
   fsEntry: TS.FileSystemEntry;
   style?: any;
   selectionMode: boolean;
-  handleTagMenu: (event: Object, tag: TS.Tag, entryPath: string) => void;
+  handleTagMenu: (
+    event: Object,
+    tag: TS.Tag,
+    entry: TS.FileSystemEntry,
+  ) => void;
   handleGridContextMenu: (event: Object, fsEntry: TS.FileSystemEntry) => void;
   handleGridCellDblClick: (event: Object, fsEntry: TS.FileSystemEntry) => void;
   handleGridCellClick: (event: Object, fsEntry: TS.FileSystemEntry) => void;
@@ -134,22 +137,19 @@ function RowCell(props: Props) {
   const { selectedEntries, selectEntry } = useSelectedEntriesContext();
   const { entrySize, showTags, thumbnailMode } =
     usePerspectiveSettingsContext();
-  const { addTags, editTagForEntry } = useTaggingActionsContext();
-  const { readOnlyMode } = useCurrentLocationContext();
+  const { addTag, editTagForEntry } = useTaggingActionsContext();
+  const { findLocation, readOnlyMode } = useCurrentLocationContext();
   const supportedFileTypes = useSelector(getSupportedFileTypes);
   const reorderTags: boolean = useSelector(isReorderTags);
-  const dispatch: AppDispatch = useDispatch();
+  const rowCellLocation = findLocation(fsEntry.locationID);
 
   // You can use the dispatch function to dispatch actions
   const handleEditTag = (path: string, tag: TS.Tag, newTagTitle?: string) => {
     editTagForEntry(path, tag, newTagTitle);
   };
-  const handleAddTags = (paths: Array<string>, tags: Array<TS.Tag>) => {
-    addTags(paths, tags);
-  };
 
   const handleAddTag = (tag: TS.Tag, parentTagGroupUuid: TS.Uuid) => {
-    dispatch(AppActions.addTag(tag, parentTagGroupUuid));
+    addTag([tag], parentTagGroupUuid);
   };
 
   // remove isNewFile on Cell click it will open file in editMode
@@ -160,7 +160,7 @@ function RowCell(props: Props) {
   const entryTitle = extractTitle(
     fsEntry.name,
     !fsEntry.isFile,
-    PlatformIO.getDirSeparator(),
+    rowCellLocation?.getDirSeparator(),
   );
 
   let description;
@@ -189,7 +189,7 @@ function RowCell(props: Props) {
     fileNameTags = extractTagsAsObjects(
       fsEntry.name,
       AppConfig.tagDelimiter,
-      PlatformIO.getDirSeparator(),
+      rowCellLocation?.getDirSeparator(),
     );
   }
 
@@ -231,8 +231,7 @@ function RowCell(props: Props) {
         <TagContainer
           tag={tag}
           key={entryPath + tag.title}
-          entryPath={entryPath}
-          addTags={handleAddTags}
+          entry={fsEntry}
           handleTagMenu={handleTagMenu}
         />
       ) : (
@@ -240,8 +239,7 @@ function RowCell(props: Props) {
           tag={tag}
           index={tag.type === 'sidecar' ? index : index - sideCarLength}
           key={entryPath + tag.title}
-          entryPath={entryPath}
-          addTags={handleAddTags}
+          entry={fsEntry}
           addTag={handleAddTag}
           handleTagMenu={handleTagMenu}
           selectedEntries={selectedEntries}
@@ -376,7 +374,6 @@ function RowCell(props: Props) {
         sx={{ backgroundColor, borderRadius: '4px' }}
       >
         <Grid
-          item
           style={{
             minHeight: entryHeight,
             width: 45,
@@ -392,19 +389,19 @@ function RowCell(props: Props) {
         </Grid>
         {isSmall ? (
           <Grid
-            item
-            xs
-            zeroMinWidth
             style={{
               display: 'flex',
+              width: '100%',
+              marginLeft: 5,
             }}
           >
             <Typography
               variant="body2"
               style={{
-                overflowX: 'clip',
+                overflowX: 'hidden',
                 textWrap: 'nowrap',
                 alignSelf: 'center',
+                marginRight: 5,
               }}
               title={
                 fsEntry.name +
@@ -419,7 +416,7 @@ function RowCell(props: Props) {
             </Typography>
           </Grid>
         ) : (
-          <Grid item xs zeroMinWidth style={{ alignSelf: 'center' }}>
+          <Grid style={{ alignSelf: 'center', width: '100%', marginLeft: 5 }}>
             <Typography
               variant="body1"
               title={fsEntry.name}
@@ -453,7 +450,6 @@ function RowCell(props: Props) {
         )}
         {fsEntry.meta && fsEntry.meta.thumbPath && (
           <Grid
-            item
             style={{
               display: 'flex',
               width: entryHeight,
@@ -466,8 +462,8 @@ function RowCell(props: Props) {
                 fsEntry.meta?.thumbPath +
                 (fsEntry.meta &&
                 fsEntry.meta.thumbPath &&
-                !PlatformIO.haveObjectStoreSupport() &&
-                !PlatformIO.haveWebDavSupport()
+                !rowCellLocation.haveObjectStoreSupport() &&
+                !rowCellLocation.haveWebDavSupport()
                   ? urlGetDelim(fsEntry.meta?.thumbPath) +
                     fsEntry.meta.lastUpdated
                   : '')
@@ -487,6 +483,21 @@ function RowCell(props: Props) {
             />
           </Grid>
         )}
+        <Grid
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            marginRight: 5,
+          }}
+        >
+          <IconButton
+            aria-label="entry context menu"
+            size="small"
+            onClick={(event) => handleGridContextMenu(event, fsEntry)}
+          >
+            <MoreMenuIcon />
+          </IconButton>
+        </Grid>
       </Grid>
     </RowPaper>
   );
