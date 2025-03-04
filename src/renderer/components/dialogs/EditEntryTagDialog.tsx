@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,37 +16,38 @@
  *
  */
 
-import React, {
-  useState,
-  useEffect,
-  useMemo,
-  ChangeEvent,
-  useRef,
-} from 'react';
-import Button from '@mui/material/Button';
-import TextField from '@mui/material/TextField';
-import DialogActions from '@mui/material/DialogActions';
+import AppConfig from '-/AppConfig';
+import TsButton from '-/components/TsButton';
+import TsTextField from '-/components/TsTextField';
+import TsDialogActions from '-/components/dialogs/components/TsDialogActions';
+import TsDialogTitle from '-/components/dialogs/components/TsDialogTitle';
+import { useTaggingActionsContext } from '-/hooks/useTaggingActionsContext';
+import { Pro } from '-/pro';
+import { tagsValidation } from '-/services/utils-io';
+import { TS } from '-/tagspaces.namespace';
+import { isDateTimeTag } from '-/utils/dates';
+import { isGeoTag } from '-/utils/geo';
+import useValidation from '-/utils/useValidation';
+import EditIcon from '@mui/icons-material/Edit';
+import Dialog from '@mui/material/Dialog';
 import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
 import FormControl from '@mui/material/FormControl';
 import FormHelperText from '@mui/material/FormHelperText';
-import Dialog from '@mui/material/Dialog';
-import EditIcon from '@mui/icons-material/Edit';
-import { isGeoTag } from '-/utils/geo';
-import { Pro } from '-/pro';
-import { getSelectedTag } from '-/reducers/app';
-import { isDateTimeTag } from '-/utils/dates';
-import { TS } from '-/tagspaces.namespace';
-import useValidation from '-/utils/useValidation';
-import DialogCloseButton from '-/components/dialogs/DialogCloseButton';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
+import React, {
+  ChangeEvent,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import { useTranslation } from 'react-i18next';
-import { useTaggingActionsContext } from '-/hooks/useTaggingActionsContext';
-import { useSelector } from 'react-redux';
 
 interface Props {
   open: boolean;
+  entries: TS.FileSystemEntry[];
+  tag: TS.Tag;
   onClose: () => void;
 }
 
@@ -55,12 +56,10 @@ const DateTagEditor = Pro && Pro.UI ? Pro.UI.DateTagEditor : React.Fragment;
 
 function EditEntryTagDialog(props: Props) {
   const { t } = useTranslation();
-
-  const { addTagsToEntry, editTagForEntry } = useTaggingActionsContext();
-  const selectedTag: TS.Tag = useSelector(getSelectedTag);
+  const { onClose, open, tag, entries } = props;
+  const { addTagsToFsEntries, editTagForEntry } = useTaggingActionsContext();
   const [showAdvancedMode, setShowAdvancedMode] = useState<boolean>(false);
-  const [title, setTitle] = useState(selectedTag && selectedTag.title);
-
+  const [title, setTitle] = useState(tag && tag.title);
   const titleRef = useRef<HTMLInputElement>(null);
   const isShowDatePeriodEditor = useMemo(() => {
     let showDatePeriodEditor = false;
@@ -83,19 +82,17 @@ function EditEntryTagDialog(props: Props) {
     isShowDatePeriodEditor,
   );
   const { setError, haveError } = useValidation();
-  const { onClose, open } = props;
 
   useEffect(() => {
     if (titleRef && titleRef.current) {
       titleRef.current.value = title;
     }
-    // handleValidation();
   }, [title]);
 
-  function handleValidation() {
+  function handleValidation(tagTitle: string) {
     // Tags should be at least 1 character long and should not contain: spaces, \, / #
-    const tagCheck = RegExp(/^[^#/\\ [\]]{1,}$/);
-    if (title && tagCheck.test(title)) {
+    //const tagCheck = RegExp(/^[^#/\\ [\]]{1,}$/);
+    if (tagsValidation(tagTitle)) {
       setError('tag', false);
       return true;
     }
@@ -104,24 +101,17 @@ function EditEntryTagDialog(props: Props) {
   }
 
   function onConfirm() {
-    if (handleValidation() && !haveError()) {
-      const isNew = selectedTag.functionality === 'geoTagging'; //path.includes(props.selectedTag.title);
+    if (!haveError()) {
+      const isNew =
+        tag.functionality === 'geoTagging' ||
+        tag.functionality === 'dateTagging';
       if (isNew) {
-        addTagsToEntry(selectedTag.path, [{ ...selectedTag, title }]);
-      } else {
-        editTagForEntry(selectedTag.path, selectedTag, title);
+        addTagsToFsEntries(entries, [{ ...tag, title }]);
+      } else if (entries.length === 1) {
+        editTagForEntry(entries[0].path, tag, title);
       }
       props.onClose();
     }
-  }
-
-  function renderTitle() {
-    return (
-      <DialogTitle>
-        {t('core:tagProperties')}{' '}
-        <DialogCloseButton testId="closeEditEntryTagTID" onClose={onClose} />
-      </DialogTitle>
-    );
   }
 
   function renderContent() {
@@ -135,25 +125,30 @@ function EditEntryTagDialog(props: Props) {
         }}
       >
         <FormControl fullWidth={true} error={haveError('tag')}>
-          <TextField
-            fullWidth={true}
+          <TsTextField
             error={haveError('tag')}
             disabled={editDisabled}
             inputRef={titleRef}
-            margin="dense"
             name="title"
             autoFocus
+            updateValue={(value) => {
+              setTitle(value);
+            }}
+            retrieveValue={() => title}
             label={t('core:editTag')}
             onChange={(event: ChangeEvent<HTMLInputElement>) => {
               const { target } = event;
+              handleValidation(target.value);
               setTitle(target.value);
             }}
             defaultValue={title}
             data-tid="editTagEntryDialog_input"
-            InputProps={{
-              endAdornment: (
-                <EditIcon onClick={() => setEditDisabled(!editDisabled)} />
-              ),
+            slotProps={{
+              input: {
+                endAdornment: (
+                  <EditIcon onClick={() => setEditDisabled(!editDisabled)} />
+                ),
+              },
             }}
           />
           {haveError('tag') && (
@@ -171,58 +166,18 @@ function EditEntryTagDialog(props: Props) {
           />
         )}
         {editDisabled && isShowDatePeriodEditor && (
-          <DateTagEditor
-            datePeriodTag={selectedTag && selectedTag.title}
-            onChange={setTitle}
-          />
+          <DateTagEditor datePeriodTag={tag && tag.title} onChange={setTitle} />
         )}
       </DialogContent>
     );
   }
 
-  function renderActions() {
-    return (
-      <DialogActions
-        style={{
-          justifyContent: 'space-between',
-        }}
-      >
-        {GeoTagEditor && isGeoTag(title) ? (
-          <Button
-            data-tid="switchAdvancedModeTID"
-            onClick={() => setShowAdvancedMode(!showAdvancedMode)}
-          >
-            {showAdvancedMode
-              ? t('core:switchSimpleMode')
-              : t('core:switchAdvancedMode')}
-          </Button>
-        ) : (
-          <div />
-        )}
-        <div>
-          <Button data-tid="closeEditTagEntryDialog" onClick={props.onClose}>
-            {t('core:cancel')}
-          </Button>
-          <Button
-            disabled={haveError()}
-            onClick={onConfirm}
-            data-tid="confirmEditTagEntryDialog"
-            color="primary"
-            variant="contained"
-          >
-            {t('core:ok')}
-          </Button>
-        </div>
-      </DialogActions>
-    );
-  }
-
   const theme = useTheme();
-  const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
+  const smallScreen = useMediaQuery(theme.breakpoints.down('md'));
   return (
     <Dialog
       open={open}
-      fullScreen={fullScreen}
+      fullScreen={smallScreen}
       onClose={onClose}
       style={{
         minWidth: 400,
@@ -239,9 +194,44 @@ function EditEntryTagDialog(props: Props) {
         }*/
       }}
     >
-      {renderTitle()}
+      <TsDialogTitle
+        dialogTitle={t('core:tagProperties')}
+        closeButtonTestId="closeEditEntryTagTID"
+        onClose={onClose}
+      />
       {renderContent()}
-      {renderActions()}
+      <TsDialogActions
+        style={{
+          justifyContent: 'space-between',
+        }}
+      >
+        {GeoTagEditor && isGeoTag(title) ? (
+          <TsButton
+            data-tid="switchAdvancedModeTID"
+            onClick={() => setShowAdvancedMode(!showAdvancedMode)}
+          >
+            {showAdvancedMode
+              ? t('core:switchSimpleMode')
+              : t('core:switchAdvancedMode')}
+          </TsButton>
+        ) : (
+          <div />
+        )}
+        <div>
+          <TsButton data-tid="closeEditTagEntryDialog" onClick={props.onClose}>
+            {t('core:cancel')}
+          </TsButton>
+          <TsButton
+            disabled={haveError()}
+            style={{ marginLeft: AppConfig.defaultSpaceBetweenButtons }}
+            onClick={onConfirm}
+            data-tid="confirmEditTagEntryDialog"
+            variant="contained"
+          >
+            {t('core:ok')}
+          </TsButton>
+        </div>
+      </TsDialogActions>
     </Dialog>
   );
 }

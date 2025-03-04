@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,7 +16,7 @@
  *
  */
 
-import React, { useRef } from 'react';
+import React, { useEffect, useRef } from 'react';
 import { useDrag, useDrop } from 'react-dnd';
 
 import { getEmptyImage } from 'react-dnd-html5-backend';
@@ -25,7 +25,8 @@ import AppConfig from '-/AppConfig';
 import DragItemTypes from './DragItemTypes';
 import TagContainer from './TagContainer';
 import { TS } from '-/tagspaces.namespace';
-import PlatformIO from '-/services/platform-facade';
+import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
+import { useTaggingActionsContext } from '-/hooks/useTaggingActionsContext';
 
 interface Props {
   tag: TS.Tag;
@@ -39,8 +40,7 @@ interface Props {
   ) => void;
   handleRemoveTag?: (event: Object, tag: TS.Tag) => void;
   tagMode?: 'default' | 'display' | 'remove';
-  entryPath?: string;
-  addTags?: (paths: Array<string>, tags: Array<TS.Tag>, updateIndex?) => void;
+  entry?: TS.FileSystemEntry;
   addTag?: (tag: TS.Tag, parentTagGroupUuid: TS.Uuid) => void;
   moveTag?: (
     tagTitle: string,
@@ -63,11 +63,10 @@ const TagContainerDnd = (props: Props) => {
     index,
     tag,
     tagGroup,
-    entryPath,
+    entry,
     handleTagMenu,
     deleteIcon,
     addTag,
-    addTags,
     tagMode,
     reorderTags,
     changeTagOrder,
@@ -76,7 +75,10 @@ const TagContainerDnd = (props: Props) => {
     selectedEntries,
   } = props;
 
+  const { addTags } = useTaggingActionsContext();
+  const { findLocation } = useCurrentLocationContext();
   const tagContainerRef = useRef<HTMLSpanElement>(null);
+  const currentLocation = findLocation();
 
   const endDrag = (item, monitor) => {
     // const item = monitor.getItem();
@@ -85,27 +87,30 @@ const TagContainerDnd = (props: Props) => {
     // console.log('DropRESULT: ', dropResult);
     if (
       dropResult &&
-      dropResult.tagGroupId &&
-      tagGroup &&
-      dropResult.tagGroupId !== tagGroup.uuid
+      dropResult.tagGroupId
+      //tagGroup &&
+      //dropResult.tagGroupId !== tagGroup.uuid
     ) {
-      if (moveTag) {
+      if (moveTag && tagGroup) {
         // console.log(`Dropped ${item.tagId} from ${tagGroup.uuid} into ${dropResult.tagGroupId}!`);
         moveTag(item.tag.title, tagGroup.uuid, dropResult.tagGroupId);
       } else if (addTag) {
         // add from file DnD to tagGroup
         addTag(tag, dropResult.tagGroupId);
       }
-    } else if (dropResult && dropResult.entryPath && addTags) {
+    } else if (dropResult && dropResult.entryPath) {
       // console.log(`Dropped item: ${item.tag.title} onto file: ${dropResult.entryPath}!`);
       if (
         selectedEntries.some((entry) => entry.path === dropResult.entryPath)
       ) {
-        const selectedEntryPaths = [];
-        selectedEntries.map((entry) => selectedEntryPaths.push(entry.path));
-        addTags(selectedEntryPaths, [item.tag]);
+        /*const selectedEntryPaths = [];
+        selectedEntries.map((entry) => selectedEntryPaths.push(entry.path));*/
+        addTags(selectedEntries, [item.tag]);
       } else {
-        addTags([dropResult.entryPath], [item.tag]);
+        addTags(
+          [currentLocation.toFsEntry(dropResult.entryPath, true)],
+          [item.tag],
+        );
       }
     }
   };
@@ -169,7 +174,7 @@ const TagContainerDnd = (props: Props) => {
       // but it's good here for the sake of performance
       // to avoid expensive index searches.
       dragItem.index = hoverIndex;
-    } else if (reorderTags && entryPath) {
+    } else if (reorderTags && entry) {
       // sort fileSystemEntries tags
       const dragIndex = dragItem.index;
       const hoverIndex = index;
@@ -192,9 +197,9 @@ const TagContainerDnd = (props: Props) => {
       // Skip reorder on DnD Tag from an other file
       if (dragItem.tag.type === 'plain') {
         const extractedTags = extractTags(
-          entryPath,
+          entry.path,
           AppConfig.tagDelimiter,
-          PlatformIO.getDirSeparator(),
+          currentLocation?.getDirSeparator(),
         );
         if (
           extractedTags.length > 0 &&
@@ -207,7 +212,7 @@ const TagContainerDnd = (props: Props) => {
       }
 
       dragItem.tag.position = hoverIndex;
-      editTagForEntry(entryPath, dragItem.tag);
+      editTagForEntry(entry.path, dragItem.tag);
 
       dragItem.index = hoverIndex;
     }
@@ -220,28 +225,30 @@ const TagContainerDnd = (props: Props) => {
       // Implement hover logic here
     },*/
   });
-  // Use empty image as a drag preview so browsers don't draw it
-  // and we can draw whatever we want on the custom drag layer instead.
-  preview(getEmptyImage(), {
-    // IE fallback: specify that we'd rather screenshot the node
-    // when it already knows it's being dragged so we can hide it with CSS.
-    captureDraggingState: true,
-  });
+  // Disable the default drag preview by using an empty image.
+  useEffect(() => {
+    // Use empty image as a drag preview so browsers don't draw it
+    // and we can draw whatever we want on the custom drag layer instead.
+    preview(getEmptyImage(), {
+      // IE fallback: specify that we'd rather screenshot the node
+      // when it already knows it's being dragged so we can hide it with CSS.
+      captureDraggingState: true,
+    });
+  }, [preview]);
 
-  const { isDragging } = collected;
+  const { isDragging, ...rest } = collected;
 
   drag(drop(tagContainerRef));
 
   return (
-    <span ref={tagContainerRef} {...collected}>
+    <span ref={tagContainerRef} {...rest}>
       <TagContainer
         tag={tag}
         tagGroup={tagGroup}
         handleTagMenu={handleTagMenu}
         deleteIcon={deleteIcon}
-        addTags={addTags}
         tagMode={tagMode}
-        entryPath={entryPath}
+        entry={entry}
         isDragging={isDragging}
         reorderTags={reorderTags}
       />

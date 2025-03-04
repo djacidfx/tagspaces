@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -17,26 +17,28 @@
  */
 
 import React from 'react';
-import Button from '@mui/material/Button';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import Typography from '@mui/material/Typography';
+import DraggablePaper from '-/components/DraggablePaper';
+import TsButton from '-/components/TsButton';
+import TsDialogTitle from '-/components/dialogs/components/TsDialogTitle';
 import Dialog from '@mui/material/Dialog';
-import DialogCloseButton from '-/components/dialogs/DialogCloseButton';
+import DialogContent from '@mui/material/DialogContent';
+import Paper from '@mui/material/Paper';
+import Typography from '@mui/material/Typography';
+
+import AppConfig from '-/AppConfig';
+import { getProTeaserSlides } from '-/content/ProTeaserSlides';
+import { openURLExternally } from '-/services/utils-io';
+import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
+import NavigateNextIcon from '@mui/icons-material/NavigateNext';
 import { useTheme } from '@mui/material/styles';
 import useMediaQuery from '@mui/material/useMediaQuery';
-import { getProTeaserIndex } from '-/reducers/app';
-import { useSelector } from 'react-redux';
-import { getProTeaserSlides } from '-/content/ProTeaserSlides';
 import Links from 'assets/links';
-import { openURLExternally } from '-/services/utils-io';
 import { useTranslation } from 'react-i18next';
 import Slider from 'react-slick';
-import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 
 interface Props {
   open: boolean;
+  slideIndex: number;
   onClose: () => void;
 }
 
@@ -45,7 +47,7 @@ interface SlideProps {
   description?: '';
   ctaURL?: string;
   ctaTitle?: string;
-  items?: Array<string>;
+  items?: Array<React.ReactNode>;
   pictureURL?: string;
   pictureShadow?: boolean;
   videoURL?: string;
@@ -71,6 +73,8 @@ function Slide(props: SlideProps) {
       style={{
         padding: 15,
         textAlign: 'left',
+        overflowY: 'hidden',
+        overflowX: 'hidden',
       }}
     >
       <Typography
@@ -83,11 +87,12 @@ function Slide(props: SlideProps) {
         <Typography variant="subtitle1">{description}</Typography>
       )}
       {items &&
-        items.map((item) => (
-          <Typography variant="subtitle1">&#x2605;&nbsp;{item}</Typography>
+        items.map((item, index) => (
+          <Typography key={index} variant="subtitle1">
+            &#x2605;&nbsp;{item}
+          </Typography>
         ))}
-      <Typography variant="subtitle1">&nbsp;</Typography>
-      <div style={{ textAlign: 'center' }}>
+      <div style={{ textAlign: 'center', paddingTop: 10 }}>
         {pictureURL && (
           <a
             href="#"
@@ -126,28 +131,22 @@ function Slide(props: SlideProps) {
           />
         )}
         <br />
-        <Button
+        <TsButton
           onClick={() => {
             openURLExternally(Links.links.productsOverview, true);
           }}
-          // variant="contained"
-          color="primary"
-          size="small"
         >
-          Compare TagSpaces Products
-        </Button>
+          Compare & Upgrade
+        </TsButton>
         {ctaTitle && (
-          <Button
+          <TsButton
             onClick={() => {
               openURLExternally(ctaURL, true);
             }}
-            style={{ marginLeft: 10 }}
-            // variant="contained"
-            color="primary"
-            size="small"
+            style={{ marginLeft: AppConfig.defaultSpaceBetweenButtons }}
           >
             {ctaTitle}
-          </Button>
+          </TsButton>
         )}
       </div>
     </div>
@@ -157,14 +156,14 @@ function Slide(props: SlideProps) {
 function ProTeaserDialog(props: Props) {
   const { t } = useTranslation();
   //const swiperElRef = useRef(null); //<SwiperRef>
-  const slideIndex = useSelector(getProTeaserIndex);
+  //const slideIndex = useSelector(getProTeaserIndex);
 
   const slidesEN = getProTeaserSlides(t);
 
-  const { open, onClose } = props;
+  const { open, onClose, slideIndex } = props;
 
   const theme = useTheme();
-  const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
+  const smallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
   const slides = [];
   for (let index in slidesEN) {
@@ -177,7 +176,7 @@ function ProTeaserDialog(props: Props) {
     const { className, style, onClick } = props;
     return (
       <div className={className} onClick={onClick}>
-        <NavigateNextIcon color="primary" />
+        <NavigateNextIcon fontSize="large" color="primary" />
       </div>
     );
   }
@@ -186,7 +185,7 @@ function ProTeaserDialog(props: Props) {
     const { className, style, onClick } = props;
     return (
       <div className={className} onClick={onClick}>
-        <NavigateBeforeIcon color="primary" />
+        <NavigateBeforeIcon fontSize="large" color="primary" />
       </div>
     );
   }
@@ -194,7 +193,7 @@ function ProTeaserDialog(props: Props) {
   const sliderSettings = {
     className: 'center',
     centerMode: true,
-    dots: true,
+    // dots: true,
     infinite: false,
     initialSlide: initialSlide,
     centerPadding: '0px',
@@ -210,13 +209,17 @@ function ProTeaserDialog(props: Props) {
     <Dialog
       open={open}
       onClose={onClose}
-      fullScreen={fullScreen}
+      fullScreen={smallScreen}
       keepMounted
       scroll="paper"
+      PaperComponent={smallScreen ? Paper : DraggablePaper}
+      aria-labelledby="draggable-dialog-title"
     >
-      <DialogTitle style={{ justifyContent: 'center', textAlign: 'center' }}>
-        <DialogCloseButton testId="closeProTeaserTID" onClose={onClose} />
-      </DialogTitle>
+      <TsDialogTitle
+        closeButtonTestId="closeProTeaserTID"
+        onClose={onClose}
+        dialogTitle={''}
+      />
       <DialogContent
         style={{
           overflowY: 'auto',
@@ -227,6 +230,7 @@ function ProTeaserDialog(props: Props) {
           {`
             .slick-arrow {
               height: 200px;
+              width: 50px;
               display: flex;
               align-items: center;
             } 

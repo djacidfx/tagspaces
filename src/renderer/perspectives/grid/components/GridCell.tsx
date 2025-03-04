@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2023-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2023-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,9 +16,9 @@
  *
  */
 
-import React, { useEffect, useMemo, useReducer, useRef } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import { useTheme, styled } from '@mui/material/styles';
+import React, { useEffect, useReducer, useRef } from 'react';
+import { useSelector } from 'react-redux';
+import { useTheme } from '@mui/material/styles';
 import { useTranslation } from 'react-i18next';
 import Typography from '@mui/material/Typography';
 import Box from '@mui/material/Box';
@@ -37,25 +37,24 @@ import {
 import {
   formatFileSize,
   formatDateTime,
+  locationType,
 } from '@tagspaces/tagspaces-common/misc';
 import {
   extractTagsAsObjects,
   extractTitle,
+  getThumbFileLocationForFile,
 } from '@tagspaces/tagspaces-common/paths';
 import AppConfig from '-/AppConfig';
 import {
   findBackgroundColorForFolder,
   findColorForEntry,
   getDescriptionPreview,
-  getThumbPath,
 } from '-/services/utils-io';
 import TagContainerDnd from '-/components/TagContainerDnd';
 import TagContainer from '-/components/TagContainer';
 import TagsPreview from '-/components/TagsPreview';
-import PlatformIO from '-/services/platform-facade';
 import EntryIcon from '-/components/EntryIcon';
 import { TS } from '-/tagspaces.namespace';
-import { actions as AppActions, AppDispatch } from '-/reducers/app';
 import { dataTidFormat } from '-/services/test';
 import { getSupportedFileTypes, isReorderTags } from '-/reducers/settings';
 import { defaultSettings } from '../index';
@@ -65,6 +64,8 @@ import { useSelectedEntriesContext } from '-/hooks/useSelectedEntriesContext';
 import { usePerspectiveSettingsContext } from '-/hooks/usePerspectiveSettingsContext';
 import i18n from '-/services/i18n';
 import { useEditedEntryMetaContext } from '-/hooks/useEditedEntryMetaContext';
+import useFirstRender from '-/utils/useFirstRender';
+import { arrayBufferToDataURL } from '-/utils/dom';
 
 export function urlGetDelim(url) {
   return url.indexOf('?') > 0 ? '&' : '?';
@@ -108,7 +109,11 @@ interface Props {
   fsEntry: TS.FileSystemEntry;
   style?: any;
   selectionMode: boolean;
-  handleTagMenu: (event: Object, tag: TS.Tag, entryPath: string) => void;
+  handleTagMenu: (
+    event: Object,
+    tag: TS.Tag,
+    fsEntry: TS.FileSystemEntry,
+  ) => void;
   handleGridContextMenu: (event: Object, fsEntry: TS.FileSystemEntry) => void;
   handleGridCellDblClick: (event: Object, fsEntry: TS.FileSystemEntry) => void;
   handleGridCellClick: (event: Object, fsEntry: TS.FileSystemEntry) => void;
@@ -132,68 +137,106 @@ function GridCell(props: Props) {
     usePerspectiveSettingsContext();
   const { metaActions } = useEditedEntryMetaContext();
   const { selectedEntries, selectEntry } = useSelectedEntriesContext();
-  const { addTags, editTagForEntry } = useTaggingActionsContext();
-  const { readOnlyMode } = useCurrentLocationContext();
+  const { addTags, addTag, editTagForEntry } = useTaggingActionsContext();
+  const { findLocation, readOnlyMode } = useCurrentLocationContext();
   const supportedFileTypes = useSelector(getSupportedFileTypes);
   const reorderTags: boolean = useSelector(isReorderTags);
-  //const lastThumbnailImageChange = useSelector(getLastThumbnailImageChange);
-  // const desktopMode = useSelector(isDesktopMode);
-  const dispatch: AppDispatch = useDispatch();
+  const thumbPath = useRef<string>(undefined);
   const [ignored, forceUpdate] = useReducer((x) => x + 1, 0, undefined);
+  const firstRender = useFirstRender();
 
-  /*const fileSystemEntryBgColor = useRef<string>(
-    findBackgroundColorForFolder(fsEntry),
-  );*/
-  //const thumbUrl = useRef<string>(undefined);
+  const fileSystemEntryColor = findColorForEntry(fsEntry, supportedFileTypes);
+  const maxHeight = calculateEntryHeight(entrySize);
+  const entryPath = fsEntry.path;
+  const isSmall = entrySize === 'tiny' || entrySize === 'small';
+  const gridCellLocation = findLocation(fsEntry.locationID);
+
+  function getThumbUrl() {
+    if (gridCellLocation) {
+      return gridCellLocation
+        .getThumbPath(fsEntry.meta.thumbPath, fsEntry.meta?.lastUpdated)
+        .then((tmbPath) => {
+          if (tmbPath !== thumbPath.current) {
+            thumbPath.current = tmbPath;
+            return true;
+          }
+          return false;
+        });
+    }
+    return Promise.resolve(false);
+  }
+
+  function setThumbPath(): Promise<boolean> {
+    if (gridCellLocation && fsEntry.meta) {
+      if (fsEntry.meta.thumbPath) {
+        if (gridCellLocation.encryptionKey) {
+          let thumbFilePath = getThumbFileLocationForFile(
+            fsEntry.path,
+            gridCellLocation.getDirSeparator(),
+            false,
+          );
+          return gridCellLocation
+            .getFileContentPromise(thumbFilePath, 'arraybuffer')
+            .then((arrayBuffer) => {
+              if (arrayBuffer) {
+                return arrayBufferToDataURL(arrayBuffer, 'image/jpeg').then(
+                  (dataURL) => {
+                    thumbPath.current = dataURL;
+                    return true;
+                  },
+                );
+              } else if (arrayBuffer === undefined) {
+                return getThumbUrl();
+              }
+            });
+        } else {
+          return getThumbUrl();
+        }
+      }
+    }
+    return Promise.resolve(false);
+  }
 
   useEffect(() => {
-    if (metaActions && metaActions.length > 0) {
+    setThumbPath().then((success) => {
+      if (success) {
+        forceUpdate();
+      }
+    });
+  }, [fsEntry]);
+
+  useEffect(() => {
+    if (!firstRender && metaActions && metaActions.length > 0) {
       for (const action of metaActions) {
-        if (fsEntry.path === action.entry.path) {
-          /*if (action.action === 'thumbChange') {
-            if (action.entry.meta.thumbPath) {
-              thumbUrl.current = getThumbPath(
-                action.entry.meta.thumbPath,
-                action.entry.meta?.lastUpdated,
-              );
-            } else {
-              //thumbnail deleted
-              thumbUrl.current = undefined;
-              if (fsEntry.meta) {
-                const { thumbPath, ...meta } = fsEntry.meta;
-                fsEntry.meta = meta;
-              }
-            }
-            forceUpdate();
-          } else*/
-          /*if (action.action === 'bgdColorChange') {
-            fileSystemEntryBgColor.current = findBackgroundColorForFolder(
-              action.entry,
-            );
-            forceUpdate();
-          } else*/
+        if (action.entry && fsEntry.path === action.entry.path) {
           if (
             action.action === 'thumbChange' ||
             action.action === 'bgdColorChange' ||
             action.action === 'descriptionChange'
           ) {
             fsEntry.meta = { ...action.entry.meta };
-            forceUpdate();
+            setThumbPath().then((success) => {
+              if (success) {
+                forceUpdate();
+              }
+            });
           }
         }
       }
     }
   }, [metaActions]);
 
+  if (!gridCellLocation && fsEntry.locationID) {
+    // location not exist in locationManager (maybe removed)
+    return null;
+  }
+
   const handleEditTag = (path: string, tag: TS.Tag, newTagTitle?: string) => {
     editTagForEntry(path, tag, newTagTitle);
   };
-  const handleAddTags = (paths: Array<string>, tags: Array<TS.Tag>) => {
-    addTags(paths, tags);
-  };
 
   const handleAddTag = (tag: TS.Tag, parentTagGroupUuid: TS.Uuid) => {
-    dispatch(AppActions.addTag(tag, parentTagGroupUuid));
+    addTag([tag], parentTagGroupUuid);
   };
 
   // remove isNewFile on Cell click it will open file in editMode
@@ -204,7 +247,7 @@ function GridCell(props: Props) {
   const entryTitle = extractTitle(
     fsEntry.name,
     !fsEntry.isFile,
-    PlatformIO.getDirSeparator(),
+    gridCellLocation?.getDirSeparator(),
   );
 
   let description;
@@ -220,63 +263,6 @@ function GridCell(props: Props) {
       );
     }
   }
-
-  const fileSystemEntryColor = findColorForEntry(fsEntry, supportedFileTypes);
-
-  let fileNameTags = [];
-  if (fsEntry.isFile) {
-    fileNameTags = extractTagsAsObjects(
-      fsEntry.name,
-      AppConfig.tagDelimiter,
-      PlatformIO.getDirSeparator(),
-    );
-  }
-
-  const fileSystemEntryTags =
-    fsEntry.meta && fsEntry.meta.tags ? fsEntry.meta.tags : [];
-  const sideCarTagsTitles = fileSystemEntryTags.map((tag) => tag.title);
-  const entryTags = [
-    ...fileSystemEntryTags,
-    ...fileNameTags.filter((tag) => !sideCarTagsTitles.includes(tag.title)),
-  ];
-
-  const entryPath = fsEntry.path;
-  const isSmall = entrySize === 'tiny' || entrySize === 'small';
-
-  const renderTags = useMemo(() => {
-    let sideCarLength = 0;
-    return entryTags.map((tag: TS.Tag, index) => {
-      const tagContainer = readOnlyMode ? (
-        <TagContainer
-          tag={tag}
-          key={entryPath + tag.title}
-          entryPath={entryPath}
-          addTags={handleAddTags}
-          handleTagMenu={handleTagMenu}
-        />
-      ) : (
-        <TagContainerDnd
-          tag={tag}
-          index={tag.type === 'sidecar' ? index : index - sideCarLength}
-          key={entryPath + tag.title}
-          entryPath={entryPath}
-          addTags={handleAddTags}
-          addTag={handleAddTag}
-          handleTagMenu={handleTagMenu}
-          selectedEntries={selectedEntries}
-          editTagForEntry={handleEditTag}
-          reorderTags={reorderTags}
-        />
-      );
-
-      if (tag.type === 'sidecar') {
-        sideCarLength = index + 1;
-      }
-      return tagContainer;
-    });
-  }, [entryTags, readOnlyMode, reorderTags, entryPath]);
-
-  const maxHeight = calculateEntryHeight(entrySize);
 
   function generateCardHeader() {
     return (
@@ -298,6 +284,52 @@ function GridCell(props: Props) {
       )
     );
   }
+
+  let fileNameTags = [];
+  if (fsEntry.isFile) {
+    fileNameTags = extractTagsAsObjects(
+      fsEntry.name,
+      AppConfig.tagDelimiter,
+      gridCellLocation?.getDirSeparator(),
+    );
+  }
+  const fileSystemEntryTags =
+    fsEntry.meta && fsEntry.meta.tags ? fsEntry.meta.tags : [];
+  const sideCarTagsTitles = fileSystemEntryTags.map((tag) => tag.title);
+  const entryTags = [
+    ...fileSystemEntryTags,
+    ...fileNameTags.filter((tag) => !sideCarTagsTitles.includes(tag.title)),
+  ];
+  const renderTags = () => {
+    let sideCarLength = 0;
+    return entryTags.map((tag: TS.Tag, index) => {
+      const tagContainer = readOnlyMode ? (
+        <TagContainer
+          tag={tag}
+          key={entryPath + tag.title}
+          entry={fsEntry}
+          handleTagMenu={handleTagMenu}
+        />
+      ) : (
+        <TagContainerDnd
+          tag={tag}
+          index={tag.type === 'sidecar' ? index : index - sideCarLength}
+          key={entryPath + tag.title}
+          entry={fsEntry}
+          addTag={handleAddTag}
+          handleTagMenu={handleTagMenu}
+          selectedEntries={selectedEntries}
+          editTagForEntry={handleEditTag}
+          reorderTags={reorderTags}
+        />
+      );
+
+      if (tag.type === 'sidecar') {
+        sideCarLength = index + 1;
+      }
+      return tagContainer;
+    });
+  }; //, [entryTags, readOnlyMode, reorderTags, entryPath]);
 
   function generateExtension() {
     return selectionMode ? (
@@ -414,12 +446,12 @@ function GridCell(props: Props) {
       >
         <Box style={{ position: 'absolute' }}>
           {showTags && entryTags ? (
-            renderTags
+            renderTags()
           ) : (
             <TagsPreview tags={entryTags} />
           )}
         </Box>
-        {fsEntry.meta && fsEntry.meta.thumbPath ? (
+        {fsEntry.meta && fsEntry.meta.thumbPath && thumbPath.current ? (
           <CardMedia
             component="img"
             loading="lazy"
@@ -427,10 +459,7 @@ function GridCell(props: Props) {
             onError={(i) => (i.target.style.display = 'none')}
             alt="thumbnail image"
             height="auto"
-            src={getThumbPath(
-              fsEntry.meta.thumbPath,
-              fsEntry.meta?.lastUpdated,
-            )}
+            src={thumbPath.current}
             style={{
               height: maxHeight - 70,
               objectFit: thumbnailMode,

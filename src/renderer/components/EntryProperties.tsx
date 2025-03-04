@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,6 +16,64 @@
  *
  */
 
+import AppConfig from '-/AppConfig';
+import Marker2xIcon from '-/assets/icons/marker-icon-2x.png';
+import MarkerIcon from '-/assets/icons/marker-icon.png';
+import MarkerShadowIcon from '-/assets/icons/marker-shadow.png';
+import { ProTooltip } from '-/components/HelperComponents';
+import InfoIcon from '-/components/InfoIcon';
+import NoTileServer from '-/components/NoTileServer';
+import PerspectiveSelector from '-/components/PerspectiveSelector';
+import Tooltip from '-/components/Tooltip';
+import TsButton from '-/components/TsButton';
+import TsIconButton from '-/components/TsIconButton';
+import TsTextField from '-/components/TsTextField';
+import ConfirmDialog from '-/components/dialogs/ConfirmDialog';
+import LinkGeneratorDialog from '-/components/dialogs/LinkGeneratorDialog';
+import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
+import { useEditedEntryMetaContext } from '-/hooks/useEditedEntryMetaContext';
+import { useFilePropertiesContext } from '-/hooks/useFilePropertiesContext';
+import { useIOActionsContext } from '-/hooks/useIOActionsContext';
+import { useNotificationContext } from '-/hooks/useNotificationContext';
+import { useOpenedEntryContext } from '-/hooks/useOpenedEntryContext';
+import { useTaggingActionsContext } from '-/hooks/useTaggingActionsContext';
+import { isDesktopMode } from '-/reducers/settings';
+import {
+  dirNameValidation,
+  fileNameValidation,
+  getAllTags,
+  openUrl,
+} from '-/services/utils-io';
+import { TS } from '-/tagspaces.namespace';
+import { generateClipboardLink } from '-/utils/dom';
+import { parseGeoLocation } from '-/utils/geo';
+import useFirstRender from '-/utils/useFirstRender';
+import ColorPaletteIcon from '@mui/icons-material/ColorLens';
+import ClearBackgroundIcon from '@mui/icons-material/FormatColorResetOutlined';
+import SetBackgroundIcon from '@mui/icons-material/OpacityOutlined';
+import QRCodeIcon from '@mui/icons-material/QrCode';
+import {
+  Box,
+  FormControl,
+  InputAdornment,
+  Popover,
+  TextField,
+  Typography,
+  inputBaseClasses,
+} from '@mui/material';
+import FormHelperText from '@mui/material/FormHelperText';
+import Grid from '@mui/material/Grid2';
+import Stack from '@mui/material/Stack';
+import { styled, useTheme } from '@mui/material/styles';
+import { formatBytes } from '@tagspaces/tagspaces-common/misc';
+import {
+  extractContainingDirectoryPath,
+  extractDirectoryName,
+  extractFileName,
+  extractTitle,
+} from '@tagspaces/tagspaces-common/paths';
+import { getUuid } from '@tagspaces/tagspaces-common/utils-io';
+import L from 'leaflet';
 import React, {
   ChangeEvent,
   useEffect,
@@ -23,146 +81,23 @@ import React, {
   useRef,
   useState,
 } from 'react';
-import { styled, useTheme } from '@mui/material/styles';
-import { getMetaFileLocationForFile } from '@tagspaces/tagspaces-common/paths';
-import L from 'leaflet';
-import {
-  Grid,
-  FormControl,
-  Typography,
-  TextField,
-  inputBaseClasses,
-  Button,
-  InputAdornment,
-} from '@mui/material';
-import QRCodeIcon from '@mui/icons-material/QrCode';
-import Tooltip from '-/components/Tooltip';
-import { LocalLocationIcon, CloudLocationIcon } from '-/components/CommonIcons';
-import Stack from '@mui/material/Stack';
-import SetBackgroundIcon from '@mui/icons-material/OpacityOutlined';
-import ClearBackgroundIcon from '@mui/icons-material/FormatColorResetOutlined';
+import { useTranslation } from 'react-i18next';
 import {
   AttributionControl,
-  MapContainer,
   LayerGroup,
+  MapContainer,
   Marker,
   Popup,
   TileLayer,
 } from 'react-leaflet';
-import { ButtonGroup, IconButton } from '@mui/material';
-import { formatBytes } from '@tagspaces/tagspaces-common/misc';
-import {
-  extractContainingDirectoryPath,
-  extractFileName,
-  extractDirectoryName,
-} from '@tagspaces/tagspaces-common/paths';
-import TagDropContainer from './TagDropContainer';
-import MoveCopyFilesDialog from './dialogs/MoveCopyFilesDialog';
-import {
-  fileNameValidation,
-  dirNameValidation,
-  getFolderBgndPath,
-  getThumbPath,
-  getAllTags,
-} from '-/services/utils-io';
-import { getUuid } from '@tagspaces/tagspaces-common/utils-io';
-import { parseGeoLocation } from '-/utils/geo';
+import { useSelector } from 'react-redux';
 import { Pro } from '../pro';
-import PlatformIO from '../services/platform-facade';
+import TagDropContainer from './TagDropContainer';
 import TagsSelect from './TagsSelect';
 import TransparentBackground from './TransparentBackground';
-import MarkerIcon from '-/assets/icons/marker-icon.png';
-import Marker2xIcon from '-/assets/icons/marker-icon-2x.png';
-import MarkerShadowIcon from '-/assets/icons/marker-shadow.png';
-import ConfirmDialog from '-/components/dialogs/ConfirmDialog';
-import { TS } from '-/tagspaces.namespace';
-import NoTileServer from '-/components/NoTileServer';
-import InfoIcon from '-/components/InfoIcon';
-import { ProTooltip } from '-/components/HelperComponents';
-import PerspectiveSelector from '-/components/PerspectiveSelector';
-import FormHelperText from '@mui/material/FormHelperText';
-import LinkGeneratorDialog from '-/components/dialogs/LinkGeneratorDialog';
-import { LinkIcon } from '-/components/CommonIcons';
-import { useTranslation } from 'react-i18next';
-import { useOpenedEntryContext } from '-/hooks/useOpenedEntryContext';
-import { useTaggingActionsContext } from '-/hooks/useTaggingActionsContext';
-import { useIOActionsContext } from '-/hooks/useIOActionsContext';
-import { useCurrentLocationContext } from '-/hooks/useCurrentLocationContext';
-import { useNotificationContext } from '-/hooks/useNotificationContext';
-import { useFSWatcherContext } from '-/hooks/useFSWatcherContext';
-import RefreshIcon from '@mui/icons-material/Refresh';
-import { useEditedEntryMetaContext } from '-/hooks/useEditedEntryMetaContext';
-
-const PREFIX = 'EntryProperties';
-
-const classes = {
-  entryProperties: `${PREFIX}-entryProperties`,
-  tags: `${PREFIX}-tags`,
-  editTagsButton: `${PREFIX}-editTagsButton`,
-  textField: `${PREFIX}-textField`,
-  dropText: `${PREFIX}-dropText`,
-  propertyName: `${PREFIX}-propertyName`,
-  actionPlaceholder: `${PREFIX}-actionPlaceholder`,
-  button: `${PREFIX}-button`,
-  mdHelpers: `${PREFIX}-mdHelpers`,
-  formControl: `${PREFIX}-formControl`,
-};
-
-const Root = styled('div')(({ theme }) => ({
-  [`& .${classes.tags}`]: {
-    padding: '5px 5px 2px 2px',
-    margin: 6,
-    clear: 'both',
-    boxShadow:
-      '0 1px 1px 0 rgba(0,0,0,0.16),0 1px 1px 0 rgba(239,239,239,0.12)',
-  },
-
-  [`& .${classes.editTagsButton}`]: {
-    float: 'right',
-    margin: '0 0 10px 0',
-  },
-
-  [`& .${classes.textField}`]: {
-    marginLeft: theme.spacing(1),
-    marginRight: theme.spacing(1),
-    width: '100vh',
-  },
-
-  [`& .${classes.dropText}`]: {
-    display: 'flex',
-    width: '100%',
-    padding: '20px',
-    color: '#728496',
-  },
-
-  [`& .${classes.propertyName}`]: {
-    marginTop: 10,
-  },
-
-  [`& .${classes.actionPlaceholder}`]: {
-    textAlign: 'end',
-  },
-
-  [`& .${classes.button}`]: {
-    position: 'relative',
-    padding: '8px 12px 6px 8px',
-    margin: '0',
-  },
-
-  [`& .${classes.mdHelpers}`]: {
-    borderRadius: '0.25rem',
-    paddingLeft: '0.25rem',
-    paddingRight: '0.25rem',
-    backgroundColor: '#bcc0c561',
-  },
-  [`& .${classes.formControl}`]: {
-    marginLeft: theme.spacing(0),
-    width: '100%',
-  },
-}));
+import MoveCopyFilesDialog from './dialogs/MoveCopyFilesDialog';
 
 const ThumbnailTextField = styled(TextField)(({ theme }) => ({
-  //[`& .MuiInputBase-root}`]: {
   [`& .${inputBaseClasses.root}`]: {
     height: 220,
   },
@@ -180,6 +115,34 @@ interface Props {
 }
 
 const defaultBackgrounds = [
+  'transparent',
+  '#00000044',
+  '#ac725e44',
+  '#f83a2244',
+  '#ff753744',
+  '#ffad4644',
+  '#42d69244',
+  '#00800044',
+  '#7bd14844',
+  '#fad16544',
+  '#92e1c044',
+  '#9fe1e744',
+  '#9fc6e744',
+  '#4986e744',
+  '#9a9cff44',
+  '#c2c2c244',
+  '#cca6ac44',
+  '#f691b244',
+  '#cd74e644',
+  '#a47ae244',
+  '#845EC260',
+  '#D65DB160',
+  '#FF6F9160',
+  '#FF967160',
+  '#FFC75F60',
+  '#F9F87160',
+  '#008E9B60',
+  '#008F7A60',
   'linear-gradient(43deg, rgb(65, 88, 208) 0%, rgb(200, 80, 190) 45%, rgb(255, 204, 112) 100%)',
   'linear-gradient( 102deg,  rgba(253,189,85,1) 8%, rgba(249,131,255,1) 100% )',
   'radial-gradient( circle farthest-corner at 1.4% 2.8%,  rgba(240,249,249,1) 0%, rgba(182,199,226,1) 100% )',
@@ -189,27 +152,33 @@ const defaultBackgrounds = [
 function EntryProperties(props: Props) {
   const { t } = useTranslation();
   const theme = useTheme();
+  const desktopMode = useSelector(isDesktopMode);
   const { openedEntry, sharingLink, getOpenedDirProps } =
     useOpenedEntryContext();
-  const { renameDirectory, renameFile } = useIOActionsContext();
-  const { setBackgroundColorChange, saveDirectoryPerspective } =
-    useEditedEntryMetaContext();
-  const { addTags, removeTags, removeAllTags } = useTaggingActionsContext();
-  const { switchLocationTypeByID, switchCurrentLocationType, readOnlyMode } =
-    useCurrentLocationContext();
+  const { isEditMode } = useFilePropertiesContext();
+  const {
+    renameDirectory,
+    renameFile,
+    setBackgroundColorChange,
+    saveDirectoryPerspective,
+  } = useIOActionsContext();
+  const { metaActions } = useEditedEntryMetaContext();
+  const { addTagsToFsEntry, removeTags, removeAllTags } =
+    useTaggingActionsContext();
+  const { findLocation, readOnlyMode } = useCurrentLocationContext();
   const { showNotification } = useNotificationContext();
-  const { ignoreByWatcher, deignoreByWatcher } = useFSWatcherContext();
 
   const dirProps = useRef<TS.DirProp>(undefined);
   const fileNameRef = useRef<HTMLInputElement>(null);
   const sharingLinkRef = useRef<HTMLInputElement>(null);
   const disableConfirmButton = useRef<boolean>(true);
   const fileNameError = useRef<boolean>(false);
+  const location = findLocation(openedEntry.locationID);
 
   const entryName = openedEntry
     ? openedEntry.isFile
-      ? extractFileName(openedEntry.path, PlatformIO.getDirSeparator())
-      : extractDirectoryName(openedEntry.path, PlatformIO.getDirSeparator())
+      ? extractFileName(openedEntry.path, location?.getDirSeparator())
+      : extractDirectoryName(openedEntry.path, location?.getDirSeparator())
     : '';
 
   const [editName, setEditName] = useState<string>(undefined);
@@ -225,7 +194,73 @@ function EntryProperties(props: Props) {
     useState<boolean>(false);
   const [displayColorPicker, setDisplayColorPicker] = useState<boolean>(false);
 
+  const backgroundImage = useRef<string>('none');
+  const thumbImage = useRef<string>('none');
+
   const [ignored, forceUpdate] = useReducer((x) => x + 1, 0, undefined);
+  const firstRender = useFirstRender();
+
+  const [popoverAnchorEl, setPopoverAnchorEl] =
+    React.useState<HTMLElement | null>(null);
+
+  const popoverOpen = Boolean(popoverAnchorEl);
+  const popoverId = popoverOpen ? 'popoverBackground' : undefined;
+
+  const handlePopeverClick = (event: React.MouseEvent<HTMLElement>) => {
+    setPopoverAnchorEl(event.currentTarget);
+  };
+
+  const handlePopoverClose = () => {
+    setPopoverAnchorEl(null);
+  };
+
+  useEffect(() => {
+    reloadBackground();
+    reloadThumbnails();
+  }, [location]);
+
+  useEffect(() => {
+    if (!firstRender && metaActions && metaActions.length > 0 && openedEntry) {
+      for (const action of metaActions) {
+        if (action.action === 'bgdImgChange') {
+          reloadBackground(); //todo rethink this duplicate from openedEntry changes
+        } else if (action.action === 'thumbChange') {
+          reloadThumbnails();
+        }
+      }
+    }
+  }, [metaActions, openedEntry]);
+
+  function reloadBackground() {
+    if (location) {
+      location
+        .getFolderBgndPath(openedEntry.path, openedEntry.meta?.lastUpdated)
+        .then((bgPath) => {
+          const bgImage = bgPath ? 'url("' + bgPath + '")' : 'none';
+          if (bgImage !== backgroundImage.current) {
+            backgroundImage.current = bgImage;
+            forceUpdate();
+          }
+        });
+    }
+  }
+
+  function reloadThumbnails() {
+    if (location) {
+      location
+        .getThumbPath(
+          openedEntry.meta?.thumbPath,
+          openedEntry.meta?.lastUpdated,
+        )
+        .then((thumbPath) => {
+          const thbImage = thumbPath ? 'url("' + thumbPath + '")' : 'none';
+          if (thbImage !== thumbImage.current) {
+            thumbImage.current = thbImage;
+            forceUpdate();
+          }
+        });
+    }
+  }
 
   useEffect(() => {
     if (editName === entryName && fileNameRef.current) {
@@ -235,31 +270,29 @@ function EntryProperties(props: Props) {
 
   const renameEntry = () => {
     if (editName !== undefined) {
+      const dirSeparator = location?.getDirSeparator();
       const path = extractContainingDirectoryPath(
         openedEntry.path,
-        PlatformIO.getDirSeparator(),
+        dirSeparator,
       );
-      const nextPath = path + PlatformIO.getDirSeparator() + editName;
+      const nextPath =
+        (path && path !== dirSeparator ? path + dirSeparator : '') + editName;
 
-      switchLocationTypeByID(openedEntry.locationId).then(
-        (currentLocationId) => {
-          if (openedEntry.isFile) {
-            renameFile(openedEntry.path, nextPath)
-              .then(() => switchCurrentLocationType())
-              .catch(() => {
-                switchCurrentLocationType();
-                fileNameRef.current.value = entryName;
-              });
-          } else {
-            renameDirectory(openedEntry.path, editName)
-              .then((newDirPath) => switchCurrentLocationType())
-              .catch(() => {
-                switchCurrentLocationType();
-                fileNameRef.current.value = entryName;
-              });
-          }
-        },
-      );
+      if (openedEntry.isFile) {
+        renameFile(openedEntry.path, nextPath, openedEntry.locationID).catch(
+          () => {
+            fileNameRef.current.value = entryName;
+          },
+        );
+      } else {
+        renameDirectory(
+          openedEntry.path,
+          editName,
+          openedEntry.locationID,
+        ).catch(() => {
+          fileNameRef.current.value = entryName;
+        });
+      }
 
       setEditName(undefined);
     }
@@ -282,9 +315,6 @@ function EntryProperties(props: Props) {
   };
 
   const toggleMoveCopyFilesDialog = () => {
-    /*props.setSelectedEntries([
-      { name: '', isFile: true, tags: [], ...openedEntry.current }
-    ]);*/
     setMoveCopyFilesDialogOpened(!isMoveCopyFilesDialogOpened);
   };
 
@@ -293,7 +323,7 @@ function EntryProperties(props: Props) {
       showNotification(t('core:thisFunctionalityIsAvailableInPro'));
       return true;
     }
-    if (!openedEntry.editMode && editName === undefined) {
+    if (!isEditMode && editName === undefined) {
       setFileThumbChooseDialogOpened(!isFileThumbChooseDialogOpened);
     }
   };
@@ -303,7 +333,7 @@ function EntryProperties(props: Props) {
       showNotification(t('core:thisFunctionalityIsAvailableInPro'));
       return true;
     }
-    if (!openedEntry.editMode && editName === undefined) {
+    if (!isEditMode && editName === undefined) {
       setBgndImgChooseDialogOpened(!isBgndImgChooseDialogOpened);
     }
   };
@@ -314,7 +344,7 @@ function EntryProperties(props: Props) {
     } else if (dirProps.current) {
       return formatBytes(dirProps.current.totalSize);
     }
-    return t(PlatformIO.haveObjectStoreSupport() ? 'core:notAvailable' : '?');
+    return t(location?.haveObjectStoreSupport() ? 'core:notAvailable' : '?');
   };
 
   const toggleBackgroundColorPicker = () => {
@@ -323,10 +353,6 @@ function EntryProperties(props: Props) {
     }
     if (!Pro) {
       showNotification(t('core:thisFunctionalityIsAvailableInPro'));
-      return;
-    }
-    if (!Pro.MetaOperations) {
-      showNotification(t('Saving color not supported'));
       return;
     }
     setDisplayColorPicker(!displayColorPicker);
@@ -364,42 +390,24 @@ function EntryProperties(props: Props) {
   };
 
   const handleChange = (name: string, value: Array<TS.Tag>, action: string) => {
-    const metaFilePath = getMetaFileLocationForFile(
-      openedEntry.path,
-      PlatformIO.getDirSeparator(),
-    );
-    // tmp fix; saving meta sidecar file is not ignored by watcher
-    ignoreByWatcher(metaFilePath);
-    switchLocationTypeByID(openedEntry.locationId)
-      .then((currentLocationId) => {
-        if (action === 'remove-value') {
-          if (!value) {
-            // no tags left in the select element
-            return removeAllTags([openedEntry.path]); /*.then(() =>
-              updateOpenedFile(openedEntry.path, {
-                id: '',
-                tags: [],
-              }),
-            );*/
-          } else {
-            return removeTags([openedEntry.path], value);
-          }
-        } else if (action === 'clear') {
-          return removeAllTags([openedEntry.path]);
-        }
-        // create-option or select-option
-        const tags =
-          openedEntry.tags === undefined
-            ? value
-            : value.filter(
-                (tag) =>
-                  !openedEntry.tags.some((obj) => obj.title === tag.title),
-              );
-        return addTags([openedEntry.path], tags);
-      })
-      .then(() => {
-        switchCurrentLocationType().then(() => deignoreByWatcher(metaFilePath));
-      });
+    if (action === 'remove-value') {
+      if (!value) {
+        // no tags left in the select element
+        return removeAllTags([openedEntry.path]);
+      } else {
+        return removeTags([openedEntry.path], value);
+      }
+    } else if (action === 'clear') {
+      return removeAllTags([openedEntry.path]);
+    }
+    // create-option or select-option
+    const tags =
+      openedEntry.tags === undefined
+        ? value
+        : value.filter(
+            (tag) => !openedEntry.tags.some((obj) => obj.title === tag.title),
+          );
+    return addTagsToFsEntry(openedEntry, tags);
   };
 
   if (!openedEntry || !openedEntry.path || openedEntry.path === '') {
@@ -420,15 +428,7 @@ function EntryProperties(props: Props) {
       ...(openedEntry.meta && openedEntry.meta),
       perspective,
     };
-    saveDirectoryPerspective(openedEntry, perspective, openedEntry.locationId);
-    /*.then((entryMeta: TS.FileSystemEntryMeta) => {
-        openedEntry.meta = entryMeta;
-        //return updateOpenedFile(openedEntry.path, entryMeta);
-      })
-      .catch((error) => {
-        console.warn('Error saving perspective for folder ' + error);
-        showNotification(t('Error saving perspective for folder'));
-      });*/
+    saveDirectoryPerspective(openedEntry, perspective, openedEntry.locationID);
   };
 
   let perspectiveDefault;
@@ -465,71 +465,71 @@ function EntryProperties(props: Props) {
     }
   }
 
-  const geoLocation: any = getGeoLocation(openedEntry.tags);
+  const geoLocation: any = getGeoLocation(
+    openedEntry.isFile ? openedEntry.tags : openedEntry.meta?.tags,
+  );
 
   const isCloudLocation = openedEntry.url && openedEntry.url.length > 5;
 
-  const showLinkForDownloading = isCloudLocation && openedEntry.isFile;
-
-  const thumbUrl = getThumbPath(
-    openedEntry.meta?.thumbPath,
-    openedEntry.meta?.lastUpdated,
-  );
+  const showLinkForDownloading =
+    isCloudLocation && openedEntry.isFile && !openedEntry.isEncrypted;
 
   return (
-    <Root>
+    <div>
       <Grid container>
-        <Grid item xs={12}>
-          <TextField
+        <Grid size={12}>
+          <TsTextField
             error={fileNameError.current}
             label={
               openedEntry.isFile ? t('core:fileName') : t('core:folderName')
             }
-            InputProps={{
-              readOnly: editName === undefined,
-              endAdornment: (
-                <InputAdornment position="end">
-                  {!readOnlyMode && !openedEntry.editMode && (
-                    <div style={{ textAlign: 'right' }}>
-                      {editName !== undefined ? (
-                        <div>
-                          <Button
-                            data-tid="cancelRenameEntryTID"
-                            onClick={deactivateEditNameField}
+            slotProps={{
+              input: {
+                readOnly: editName === undefined,
+                endAdornment: (
+                  <InputAdornment position="end">
+                    {!readOnlyMode && !isEditMode && (
+                      <div style={{ textAlign: 'right' }}>
+                        {editName !== undefined ? (
+                          <div>
+                            <TsButton
+                              data-tid="cancelRenameEntryTID"
+                              onClick={deactivateEditNameField}
+                              variant="text"
+                            >
+                              {t('core:cancel')}
+                            </TsButton>
+                            <TsButton
+                              data-tid="confirmRenameEntryTID"
+                              onClick={renameEntry}
+                              variant="text"
+                              disabled={disableConfirmButton.current}
+                            >
+                              {t('core:confirmSaveButton')}
+                            </TsButton>
+                          </div>
+                        ) : (
+                          <TsButton
+                            data-tid="startRenameEntryTID"
+                            variant="text"
+                            onClick={activateEditNameField}
                           >
-                            {t('core:cancel')}
-                          </Button>
-                          <Button
-                            data-tid="confirmRenameEntryTID"
-                            color="primary"
-                            onClick={renameEntry}
-                            disabled={disableConfirmButton.current}
-                          >
-                            {t('core:confirmSaveButton')}
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          data-tid="startRenameEntryTID"
-                          color="primary"
-                          onClick={activateEditNameField}
-                        >
-                          {t('core:rename')}
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </InputAdornment>
-              ),
+                            {t('core:rename')}
+                          </TsButton>
+                        )}
+                      </div>
+                    )}
+                  </InputAdornment>
+                ),
+              },
             }}
-            margin="dense"
             name="name"
-            fullWidth={true}
             data-tid="fileNameProperties"
-            defaultValue={entryName} // openedEntry.current.name}
+            defaultValue={entryName}
             inputRef={fileNameRef}
+            retrieveValue={() => fileNameRef.current.value}
             onClick={() => {
-              if (!openedEntry.editMode && editName === undefined) {
+              if (!isEditMode && editName === undefined) {
                 activateEditNameField();
               }
             }}
@@ -541,7 +541,7 @@ function EntryProperties(props: Props) {
             onChange={handleFileNameChange}
           />
           {fileNameError.current && (
-            <FormHelperText>
+            <FormHelperText style={{ marginTop: 0 }}>
               {t(
                 'core:' +
                   (openedEntry.isFile ? 'fileNameHelp' : 'directoryNameHelp'),
@@ -549,36 +549,32 @@ function EntryProperties(props: Props) {
             </FormHelperText>
           )}
         </Grid>
-        <Grid item xs={12} style={{ marginTop: 10 }}>
+        <Grid size={12}>
           <TagDropContainer entryPath={openedEntry.path}>
             <TagsSelect
               label={t('core:fileTags')}
               dataTid="PropertiesTagsSelectTID"
               placeholderText={t('core:dropHere')}
-              /*isReadOnlyMode={
-                isReadOnlyMode ||
-                openedEntry.current.editMode ||
-                editName !== undefined
-              }*/
               tags={getAllTags(openedEntry)}
               tagMode="default"
               handleChange={handleChange}
-              selectedEntryPath={openedEntry.path}
+              selectedEntry={openedEntry}
+              autoFocus={true}
+              generateButton={true}
             />
           </TagDropContainer>
         </Grid>
 
         {geoLocation && (
-          <Grid item xs={12}>
+          <Grid size={12}>
             <MapContainer
-              tap={true}
               style={{
                 height: '200px',
                 width: '99%',
                 margin: 2,
                 marginTop: 8,
-                borderRadius: 5,
-                border: '1px solid rgba(0, 0, 0, 0.38)',
+                borderRadius: 3,
+                // border: '1px solid rgba(0, 0, 0, 0.38)',
               }}
               doubleClickZoom={true}
               keyboard={false}
@@ -611,13 +607,10 @@ function EntryProperties(props: Props) {
                       {t('core:lat') + ' : ' + geoLocation.lng}
                     </Typography>
                     <br />
-                    <ButtonGroup>
-                      <Button
-                        size="small"
-                        color="primary"
-                        variant="outlined"
+                    <p>
+                      <TsButton
                         onClick={() => {
-                          PlatformIO.openUrl(
+                          openUrl(
                             'https://www.openstreetmap.org/?mlat=' +
                               geoLocation.lat +
                               '&mlon=' +
@@ -633,13 +626,13 @@ function EntryProperties(props: Props) {
                         Open in
                         <br />
                         OpenStreetMap
-                      </Button>
-                      <Button
-                        size="small"
-                        color="primary"
-                        variant="outlined"
+                      </TsButton>
+                      <TsButton
+                        style={{
+                          marginLeft: AppConfig.defaultSpaceBetweenButtons,
+                        }}
                         onClick={() => {
-                          PlatformIO.openUrl(
+                          openUrl(
                             'https://maps.google.com/?q=' +
                               geoLocation.lat +
                               ',' +
@@ -655,8 +648,8 @@ function EntryProperties(props: Props) {
                         Open in
                         <br />
                         Google Maps
-                      </Button>
-                    </ButtonGroup>
+                      </TsButton>
+                    </p>
                   </Popup>
                 </Marker>
               </LayerGroup>
@@ -665,191 +658,174 @@ function EntryProperties(props: Props) {
           </Grid>
         )}
 
-        <Grid container item xs={12} spacing={1}>
-          <Grid item xs={6}>
-            <TextField
-              margin="dense"
-              fullWidth={true}
-              value={ldtm}
-              label={t('core:fileLDTM')}
-              InputProps={{
+        <Grid size={12}>
+          <TsTextField
+            value={ldtm}
+            label={t('core:fileLDTM')}
+            retrieveValue={() => ldtm}
+            slotProps={{
+              input: {
                 readOnly: true,
-              }}
-            />
-          </Grid>
-          <Grid item xs={6}>
-            <Tooltip
-              title={
-                !PlatformIO.haveObjectStoreSupport() &&
-                dirProps.current &&
-                !openedEntry.isFile &&
-                dirProps.current.dirsCount +
-                  ' ' +
-                  t('core:directories') +
-                  ', ' +
-                  dirProps.current.filesCount +
-                  ' ' +
-                  t('core:files')
-              }
-            >
-              <TextField
-                margin="dense"
-                fullWidth={true}
-                value={fileSize()}
-                label={t('core:fileSize')}
-                InputProps={{
+              },
+            }}
+          />
+        </Grid>
+
+        <Grid size={12}>
+          <Tooltip
+            title={
+              !location?.haveObjectStoreSupport() &&
+              dirProps.current &&
+              !openedEntry.isFile &&
+              dirProps.current.dirsCount +
+                ' ' +
+                t('core:directories') +
+                ', ' +
+                dirProps.current.filesCount +
+                ' ' +
+                t('core:files')
+            }
+          >
+            <TsTextField
+              value={fileSize()}
+              retrieveValue={() => fileSize()}
+              label={t('core:fileSize')}
+              slotProps={{
+                input: {
                   readOnly: true,
                   ...(!openedEntry.isFile && {
                     endAdornment: (
-                      <RefreshIcon
+                      <TsButton
+                        variant="text"
                         onClick={() =>
                           getOpenedDirProps().then((props) => {
                             dirProps.current = props;
                             forceUpdate();
                           })
                         }
-                      />
+                      >
+                        {t('core:calculate')}
+                      </TsButton>
                     ),
                   }),
-                }}
-              />
-            </Tooltip>
-          </Grid>
+                },
+              }}
+            />
+          </Tooltip>
         </Grid>
 
-        <Grid item xs={12}>
-          <FormControl fullWidth={true} className={classes.formControl}>
-            <TextField
-              margin="dense"
+        <Grid size={12}>
+          <FormControl fullWidth={true}>
+            <TsTextField
               name="path"
               title={openedEntry.url || openedEntry.path}
-              fullWidth={true}
-              label={t('core:filePath')}
+              label={isCloudLocation ? t('cloudPath') : t('core:filePath')}
               data-tid="filePathProperties"
               value={openedEntry.path || ''}
-              InputProps={{
-                readOnly: true,
-                startAdornment: (
-                  <InputAdornment position="start">
-                    {isCloudLocation ? (
-                      <CloudLocationIcon
-                        style={{ color: theme.palette.text.secondary }}
-                      />
-                    ) : (
-                      <LocalLocationIcon
-                        style={{ color: theme.palette.text.secondary }}
-                      />
-                    )}
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    {!readOnlyMode &&
-                      !openedEntry.editMode &&
-                      editName === undefined && (
-                        <Button
-                          data-tid="moveCopyEntryTID"
-                          color="primary"
-                          onClick={toggleMoveCopyFilesDialog}
-                        >
-                          {t('core:move')}
-                        </Button>
-                      )}
-                  </InputAdornment>
-                ),
+              retrieveValue={() => openedEntry.path}
+              slotProps={{
+                input: {
+                  readOnly: true,
+                  // startAdornment: (
+                  //   <InputAdornment position="start">
+                  //     {isCloudLocation ? (
+                  //       <CloudLocationIcon
+                  //         style={{ color: theme.palette.text.secondary }}
+                  //       />
+                  //     ) : (
+                  //       <LocalLocationIcon
+                  //         style={{ color: theme.palette.text.secondary }}
+                  //       />
+                  //     )}
+                  //   </InputAdornment>
+                  // ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      {!readOnlyMode &&
+                        !isEditMode &&
+                        editName === undefined && (
+                          <TsButton
+                            data-tid="moveCopyEntryTID"
+                            onClick={toggleMoveCopyFilesDialog}
+                            variant="text"
+                          >
+                            {t('core:move')}
+                          </TsButton>
+                        )}
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
           </FormControl>
         </Grid>
 
-        <Grid
-          container
-          item
-          xs={12}
-          spacing={1}
-          alignItems="center"
-          justifyContent="center"
-        >
-          <Grid item xs={showLinkForDownloading ? 8 : 12}>
-            <TextField
-              data-tid="sharingLinkTID"
-              margin="dense"
-              name="path"
-              label={
-                <>
-                  {t('core:sharingLink')}
-                  <InfoIcon tooltip={t('core:sharingLinkTooltip')} />
-                </>
-              }
-              fullWidth={true}
-              value={sharingLink}
-              inputRef={sharingLinkRef}
-              InputProps={{
+        <Grid size={12}>
+          <TsTextField
+            data-tid="sharingLinkTID"
+            name="sharinglink"
+            label={<>{t('core:sharingLink')}</>}
+            value={sharingLink}
+            inputRef={sharingLinkRef}
+            slotProps={{
+              input: {
                 readOnly: true,
-                startAdornment: (
-                  <InputAdornment position="start">
-                    <LinkIcon style={{ color: theme.palette.text.secondary }} />
-                  </InputAdornment>
-                ),
                 endAdornment: (
                   <InputAdornment position="end">
-                    <Tooltip title={t('core:copyLinkToClipboard')}>
-                      <Button
-                        data-tid="copyLinkToClipboardTID"
-                        color="primary"
-                        onClick={() => {
-                          const promise =
-                            navigator.clipboard.writeText(sharingLink);
-                          showNotification(t('core:linkCopied'));
-                        }}
-                      >
-                        {t('core:copy')}
-                      </Button>
-                    </Tooltip>
+                    <TsButton
+                      tooltip={t('core:copyLinkToClipboard')}
+                      data-tid="copyLinkToClipboardTID"
+                      variant="text"
+                      onClick={() => {
+                        const entryTitle = extractTitle(
+                          openedEntry.name,
+                          !openedEntry.isFile,
+                          location?.getDirSeparator(),
+                        );
+                        const clibboardItem = generateClipboardLink(
+                          sharingLink,
+                          entryTitle,
+                        );
+                        const promise =
+                          navigator.clipboard.write(clibboardItem);
+                        showNotification(t('core:linkCopied'));
+                      }}
+                    >
+                      {t('core:copy')}
+                    </TsButton>
+                    <InfoIcon tooltip={t('core:sharingLinkTooltip')} />
                   </InputAdornment>
                 ),
-              }}
-            />
-          </Grid>
-
+              },
+            }}
+          />
           {showLinkForDownloading && (
-            <Grid item xs={4}>
-              <TextField
-                margin="dense"
+            <Grid size={12}>
+              <TsTextField
                 name="downloadLink"
-                label={
-                  <>
-                    {t('core:downloadLink')}
-                    <InfoIcon tooltip={t('core:downloadLinkTooltip')} />
-                  </>
-                }
-                fullWidth
+                label={<>{t('core:downloadLink')}</>}
                 value={' '}
-                InputProps={{
-                  readOnly: true,
-                  startAdornment: (
-                    <InputAdornment position="start" style={{ width: '100%' }}>
-                      <Tooltip title={t('core:generateDownloadLink')}>
-                        <Button
+                slotProps={{
+                  input: {
+                    readOnly: true,
+                    endAdornment: (
+                      <InputAdornment position="end">
+                        <TsButton
+                          tooltip={t('core:generateDownloadLink')}
                           onClick={() => setShowSharingLinkDialog(true)}
+                          variant="text"
                           startIcon={
                             <QRCodeIcon
                               style={{ color: theme.palette.text.secondary }}
                             />
                           }
                         >
-                          <span
-                            style={{
-                              overflow: 'hidden',
-                              textOverflow: 'ellipsis',
-                            }}
-                          >
-                            {t('core:generateDownloadLink')}
-                          </span>
-                        </Button>
-                      </Tooltip>
-                    </InputAdornment>
-                  ),
+                          {t('core:generateDownloadLink')}
+                        </TsButton>
+                        <InfoIcon tooltip={t('core:downloadLinkTooltip')} />
+                      </InputAdornment>
+                    ),
+                  },
                 }}
               />
             </Grid>
@@ -857,7 +833,7 @@ function EntryProperties(props: Props) {
         </Grid>
 
         {!openedEntry.isFile && (
-          <Grid item xs={12} style={{ marginTop: 10 }}>
+          <Grid size={12}>
             <PerspectiveSelector
               onChange={changePerspective}
               defaultValue={perspectiveDefault}
@@ -868,133 +844,150 @@ function EntryProperties(props: Props) {
         )}
 
         {!openedEntry.isFile && (
-          <Grid item xs={12} style={{ marginTop: 5 }}>
-            <TextField
-              margin="dense"
+          <Grid size={12} style={{ marginTop: 5 }}>
+            <TsTextField
               name="path"
-              label={
-                <>
-                  {t('core:backgroundColor')}
-                  <InfoIcon
-                    tooltip={t(
-                      'The background color will not be visible if you have set a background image',
-                    )}
-                  />
-                </>
-              }
-              fullWidth
-              InputProps={{
-                readOnly: true,
-                startAdornment: (
-                  <InputAdornment position="start" style={{ marginTop: 10 }}>
-                    {/* <Tooltip title={t('core:changeBackgroundColor')}> */}
-                    <TransparentBackground>
-                      <Button
-                        fullWidth
-                        style={{
-                          width: 100,
-                          background: openedEntry.meta?.color,
-                        }}
-                        onClick={toggleBackgroundColorPicker}
-                      >
-                        &nbsp;
-                      </Button>
-                    </TransparentBackground>
-                    {/* </Tooltip> */}
-                  </InputAdornment>
-                ),
-                endAdornment: (
-                  <InputAdornment position="end">
-                    <Stack direction="row" spacing={1}>
-                      {defaultBackgrounds.map((background, cnt) => (
+              label={<>{t('core:backgroundColor')}</>}
+              slotProps={{
+                input: {
+                  readOnly: true,
+                  startAdornment: (
+                    <InputAdornment position="start">
+                      <TransparentBackground>
+                        <TsButton
+                          tooltip={t('editBackgroundColor')}
+                          fullWidth
+                          style={{
+                            width: 160,
+                            height: 25,
+                            background: openedEntry.meta?.color,
+                            border: '1px solid lightgray',
+                          }}
+                          onClick={toggleBackgroundColorPicker}
+                        >
+                          &nbsp;
+                        </TsButton>
+                      </TransparentBackground>
+                    </InputAdornment>
+                  ),
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <Box>
                         <ProTooltip tooltip={t('changeBackgroundColor')}>
-                          <IconButton
-                            key={cnt}
-                            data-tid={'backgroundTID' + cnt}
-                            aria-label="fingerprint"
-                            onClick={() => handleChangeColor(background)}
-                            style={{
-                              backgroundImage: background,
-                            }}
+                          <TsIconButton
+                            data-tid="changeBackgroundColorTID"
+                            aria-describedby={popoverId}
+                            onClick={handlePopeverClick}
+                            disabled={!Pro}
                           >
-                            <SetBackgroundIcon />
-                          </IconButton>
+                            <ColorPaletteIcon />
+                          </TsIconButton>
                         </ProTooltip>
-                      ))}
+                        <Popover
+                          open={popoverOpen}
+                          onClose={handlePopoverClose}
+                          anchorEl={popoverAnchorEl}
+                          id={popoverId}
+                          anchorOrigin={{
+                            vertical: 'top',
+                            horizontal: 'center',
+                          }}
+                          transformOrigin={{
+                            vertical: 'bottom',
+                            horizontal: 'center',
+                          }}
+                        >
+                          <Box style={{ padding: 10 }}>
+                            {defaultBackgrounds.map((background, cnt) => (
+                              <>
+                                <TsIconButton
+                                  key={cnt}
+                                  data-tid={'backgroundTID' + cnt}
+                                  aria-label="changeFolderBackround"
+                                  onClick={() => {
+                                    handleChangeColor(background);
+                                    handlePopoverClose();
+                                  }}
+                                  style={{
+                                    backgroundColor: background,
+                                    backgroundImage: background,
+                                    margin: 5,
+                                  }}
+                                >
+                                  <SetBackgroundIcon />
+                                </TsIconButton>
+                                {cnt % 4 === 3 && <br />}
+                              </>
+                            ))}
+                          </Box>
+                        </Popover>
+                      </Box>
                       {openedEntry.meta && openedEntry.meta.color && (
                         <>
                           <ProTooltip tooltip={t('clearFolderColor')}>
-                            <span>
-                              <IconButton
-                                data-tid={'backgroundClearTID'}
-                                disabled={!Pro}
-                                aria-label="clear"
-                                size="small"
-                                style={{ marginTop: 5 }}
-                                onClick={() =>
-                                  setConfirmResetColorDialogOpened(true)
-                                }
-                              >
-                                <ClearBackgroundIcon />
-                              </IconButton>
-                            </span>
+                            <TsIconButton
+                              data-tid={'backgroundClearTID'}
+                              disabled={!Pro}
+                              aria-label="clear"
+                              onClick={() =>
+                                setConfirmResetColorDialogOpened(true)
+                              }
+                            >
+                              <ClearBackgroundIcon />
+                            </TsIconButton>
                           </ProTooltip>
                         </>
                       )}
-                    </Stack>
-                  </InputAdornment>
-                ),
+                      <InfoIcon
+                        tooltip={t(
+                          'The background color will not be visible if you have set a background image',
+                        )}
+                      />
+                    </InputAdornment>
+                  ),
+                },
               }}
             />
           </Grid>
         )}
-        <Grid container item xs={12} spacing={1}>
-          <Grid item xs={openedEntry.isFile ? 12 : 6}>
-            <ThumbnailTextField
-              margin="dense"
-              label={t('core:thumbnail')}
-              fullWidth
-              InputProps={{
+        <Grid size={openedEntry.isFile ? 12 : 6}>
+          <FormHelperText>{t('core:thumbnail')}</FormHelperText>
+          <ThumbnailTextField
+            margin="dense"
+            variant="outlined"
+            style={{ marginTop: 0 }}
+            fullWidth
+            slotProps={{
+              input: {
                 readOnly: true,
                 startAdornment: (
                   <InputAdornment position="end">
                     <Stack
                       direction="column"
-                      spacing={1}
+                      spacing={0}
                       style={{ alignItems: 'center' }}
                     >
                       {!readOnlyMode &&
-                        !openedEntry.editMode &&
+                        !isEditMode &&
                         editName === undefined && (
                           <ProTooltip tooltip={t('changeThumbnail')}>
-                            <Button
+                            <TsButton
                               data-tid="changeThumbnailTID"
                               fullWidth
+                              variant="text"
                               onClick={toggleThumbFilesDialog}
                             >
                               {t('core:change')}
-                            </Button>
-                            {/* <IconButton
-                              disabled={!Pro}
-                              color="primary"
-                              className={classes.button}
-                              style={{ whiteSpace: 'nowrap' }}
-                              onClick={toggleThumbFilesDialog}
-                            >
-                              <EditIcon />
-                            </IconButton> */}
+                            </TsButton>
                           </ProTooltip>
                         )}
-                      {/* <ProTooltip tooltip={t('changeThumbnail')}> */}
                       <div
                         role="button"
                         tabIndex={0}
                         style={{
                           backgroundSize: 'cover',
                           backgroundRepeat: 'no-repeat',
-                          backgroundImage: thumbUrl
-                            ? 'url("' + thumbUrl + '")'
-                            : '',
+                          backgroundImage: thumbImage.current,
                           backgroundPosition: 'center',
                           borderRadius: 8,
                           minHeight: 150,
@@ -1003,48 +996,52 @@ function EntryProperties(props: Props) {
                         }}
                         onClick={toggleThumbFilesDialog}
                       />
-                      {/* </ProTooltip> */}
                     </Stack>
                   </InputAdornment>
                 ),
+              },
+            }}
+          />
+        </Grid>
+        {!openedEntry.isFile && (
+          <Grid size={6}>
+            <FormHelperText
+              style={{
+                marginLeft: AppConfig.defaultSpaceBetweenButtons,
               }}
-            />
-          </Grid>
-          {!openedEntry.isFile && (
-            <Grid item xs={6}>
-              <ThumbnailTextField
-                margin="dense"
-                label={t('core:backgroundImage')}
-                fullWidth
-                InputProps={{
+            >
+              {t('core:backgroundImage')}
+            </FormHelperText>
+            <ThumbnailTextField
+              margin="dense"
+              fullWidth
+              style={{
+                marginTop: 0,
+                marginLeft: AppConfig.defaultSpaceBetweenButtons,
+              }}
+              variant="outlined"
+              slotProps={{
+                input: {
                   readOnly: true,
                   startAdornment: (
                     <InputAdornment position="end">
                       <Stack
                         direction="column"
-                        spacing={1}
+                        spacing={0}
                         style={{ alignItems: 'center' }}
                       >
                         {!readOnlyMode &&
-                          !openedEntry.editMode &&
+                          !isEditMode &&
                           editName === undefined && (
                             <ProTooltip tooltip={t('changeBackgroundImage')}>
-                              <Button
+                              <TsButton
                                 data-tid="changeBackgroundImageTID"
                                 fullWidth
+                                variant="text"
                                 onClick={toggleBgndImgDialog}
                               >
                                 {t('core:change')}
-                              </Button>
-                              {/* <IconButton
-                                disabled={!Pro}
-                                color="primary"
-                                className={classes.button}
-                                style={{ whiteSpace: 'nowrap' }}
-                                onClick={toggleBgndImgDialog}
-                              >
-                                <EditIcon />
-                              </IconButton> */}
+                              </TsButton>
                             </ProTooltip>
                           )}
                         <div
@@ -1054,13 +1051,7 @@ function EntryProperties(props: Props) {
                           style={{
                             backgroundSize: 'cover',
                             backgroundRepeat: 'no-repeat',
-                            backgroundImage:
-                              'url("' +
-                              getFolderBgndPath(
-                                openedEntry.path,
-                                openedEntry.meta?.lastUpdated,
-                              ) +
-                              '")',
+                            backgroundImage: backgroundImage.current,
                             backgroundPosition: 'center',
                             borderRadius: 8,
                             minHeight: 150,
@@ -1072,12 +1063,50 @@ function EntryProperties(props: Props) {
                       </Stack>
                     </InputAdornment>
                   ),
-                }}
-              />
-            </Grid>
-          )}
+                },
+              }}
+            />
+          </Grid>
+        )}
+        <Grid size={12}>
+          <TsTextField
+            data-tid="entryIDTID"
+            name="entryid"
+            label={t('core:entryId')}
+            value={openedEntry?.meta?.id}
+            retrieveValue={() => openedEntry?.meta?.id}
+            slotProps={{
+              input: {
+                readOnly: true,
+                endAdornment: (
+                  <InputAdornment position="end">
+                    <TsButton
+                      tooltip={t('core:copyIdToClipboard')}
+                      data-tid="copyIdToClipboardTID"
+                      variant="text"
+                      disabled={!openedEntry?.meta?.id}
+                      onClick={() => {
+                        const entryId = openedEntry?.meta?.id;
+                        if (entryId) {
+                          const clibboardItem = generateClipboardLink(
+                            entryId,
+                            entryId,
+                          );
+                          const promise =
+                            navigator.clipboard.write(clibboardItem);
+                          showNotification(t('core:entryIdCopied'));
+                        }
+                      }}
+                    >
+                      {t('core:copy')}
+                    </TsButton>
+                    <InfoIcon tooltip={t('core:entryIdTooltip')} />
+                  </InputAdornment>
+                ),
+              },
+            }}
+          />
         </Grid>
-        {/*<Grid container item xs={12} style={{ height: 150 }} />*/}
       </Grid>
       {isConfirmResetColorDialogOpened && (
         <ConfirmDialog
@@ -1119,17 +1148,12 @@ function EntryProperties(props: Props) {
           open={isFileThumbChooseDialogOpened}
           onClose={toggleThumbFilesDialog}
           entry={openedEntry as TS.FileSystemEntry}
-          /*selectedFile={openedEntry.path}
-          thumbPath={getThumbPath()}
-          setThumb={setThumb}*/
         />
       )}
       {showSharingLinkDialog && (
         <LinkGeneratorDialog
           open={showSharingLinkDialog}
           onClose={() => setShowSharingLinkDialog(false)}
-          path={openedEntry.path}
-          locationId={openedEntry.locationId}
         />
       )}
       {BgndImgChooserDialog && (
@@ -1146,33 +1170,9 @@ function EntryProperties(props: Props) {
           setColor={handleChangeColor}
           onClose={toggleBackgroundColorPicker}
           currentDirectoryPath={openedEntry.path}
-          /*presetColors={[
-          'transparent',
-          '#FFFFFF44',
-          '#00000044',
-          '#ac725e44',
-          '#f83a2244',
-          '#fa573c44',
-          '#ff753744',
-          '#ffad4644',
-          '#42d69244',
-          '#00800044',
-          '#7bd14844',
-          '#fad16544',
-          '#92e1c044',
-          '#9fe1e744',
-          '#9fc6e744',
-          '#4986e744',
-          '#9a9cff44',
-          '#c2c2c244',
-          '#cca6ac44',
-          '#f691b244',
-          '#cd74e644',
-          '#a47ae244'
-        ]}*/
         />
       )}
-    </Root>
+    </div>
   );
 }
 

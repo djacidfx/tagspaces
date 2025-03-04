@@ -1,10 +1,10 @@
-![tagspaces logo](https://raw.github.com/tagspaces/tagspaces/master/app/assets/icons/96x96.png)
+![tagspaces logo](https://www.tagspaces.org/img/tagspaces-logo.svg)
 
-[![Join the chat at https://gitter.im/tagspaces/tagspaces](https://badges.gitter.im/Join%20Chat.svg)](https://gitter.im/tagspaces/tagspaces?utm_source=badge&utm_medium=badge&utm_campaign=pr-badge&utm_content=badge) [![Github All Releases](https://img.shields.io/github/downloads/tagspaces/tagspaces/total.svg)]()
+[![Github All Releases](https://img.shields.io/github/downloads/tagspaces/tagspaces/total.svg)]() [![Gurubase](https://img.shields.io/badge/Gurubase-Ask%20TagSpaces%20Guru-006BFF)](https://gurubase.io/g/tagspaces)
 
 **TagSpaces** is a free, no vendor lock-in, open source application for organizing, annotating and managing local files with the help of tags. It features advanced note taking functionalities and some capabilities of to-do apps. The application is available for Windows, Linux, Mac OS and Android. We provide a web clipper extension for Firefox, Edge and Chrome for easy collecting of online content in the form of local files.
 
-![tagspaces with the markdown editor](https://www.tagspaces.org/content/hero/hero-mdeditor-light.jpg)
+![tagspaces with the markdown editor](https://www.tagspaces.org/content/v6/tagspaces-lite-demo.avif)
 
 More information about can be found from the following sources:
 
@@ -81,12 +81,6 @@ Change to the branch with the name **develop**:
 and install the project dependencies:
 
     $ npm install
-
-Note: we have two package.json in `release/app` for the native dependencies and `/` you need to run `npm install` twice.
-
-The last command will automatically build the application with webpack. Now it is time to install all the TagSpaces extensions:
-
-    $ npm run install-ext-node
 
 Starting from v4 of the application, a web service is running locally as a separate process. The web service is responsible for the search index creation and the generation of the thumbnails for most of the images formats. A key is required in order for the main application to communicate with the web server. It should be generated from webpack script in the `.env` file located in `release/app` folder. This is an example for an .env file.
 
@@ -183,7 +177,7 @@ If you are having troubles using TagSpaces or have found a bug please [open a ti
 
 ## Feeds
 
-- Subscribe to RSS feed updates for the [tagspaces blog](http://tagspaces.org/blog/feed.xml)
+- Subscribe to RSS feed updates for the [tagspaces blog](http://www.tagspaces.org/blog/rss.xml)
 - Subscribe to RSS feed updates for the [master branch](https://github.com/tagspaces/tagspaces/commits/master.atom)
 
 ## License

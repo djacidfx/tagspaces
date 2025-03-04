@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,40 +16,37 @@
  *
  */
 
-import React, { useRef } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import Slider from 'react-slick';
-import Button from '@mui/material/Button';
-import DialogContent from '@mui/material/DialogContent';
-import DialogTitle from '@mui/material/DialogTitle';
-import Typography from '@mui/material/Typography';
-import Radio from '@mui/material/Radio';
-import RadioGroup from '@mui/material/RadioGroup';
-import FormControlLabel from '@mui/material/FormControlLabel';
-import FormControl from '@mui/material/FormControl';
-import ToggleButton from '@mui/material/ToggleButton';
-import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
-import Dialog from '@mui/material/Dialog';
+import ChooseTagging from '-/assets/images/abacus.svg';
 import BrowserExtension from '-/assets/images/collectcontent.svg';
 import WizardFinished from '-/assets/images/computer-desk.svg';
-import ChooseTagging from '-/assets/images/abacus.svg';
 import NewLook from '-/assets/images/desktop.svg';
+import Organize from '-/assets/images/organize.svg';
+import TsButton from '-/components/TsButton';
+import TsDialogTitle from '-/components/dialogs/components/TsDialogTitle';
+import { AppDispatch } from '-/reducers/app';
 import {
+  actions as SettingsActions,
   getCurrentTheme,
   getPersistTagsInSidecarFile,
-  actions as SettingsActions,
 } from '-/reducers/settings';
-import DialogCloseButton from '-/components/dialogs/DialogCloseButton';
-import Links from 'assets/links';
-import { useTheme } from '@mui/material/styles';
-import useMediaQuery from '@mui/material/useMediaQuery';
 import { openURLExternally } from '-/services/utils-io';
-import { AppDispatch } from '-/reducers/app';
-
-import { useTranslation } from 'react-i18next';
 import NavigateBeforeIcon from '@mui/icons-material/NavigateBefore';
 import NavigateNextIcon from '@mui/icons-material/NavigateNext';
-import { overflow } from 'html2canvas/dist/types/css/property-descriptors/overflow';
+import Dialog from '@mui/material/Dialog';
+import DialogContent from '@mui/material/DialogContent';
+import FormControl from '@mui/material/FormControl';
+import FormControlLabel from '@mui/material/FormControlLabel';
+import Radio from '@mui/material/Radio';
+import RadioGroup from '@mui/material/RadioGroup';
+import ToggleButton from '@mui/material/ToggleButton';
+import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Typography from '@mui/material/Typography';
+import { useTheme } from '@mui/material/styles';
+import useMediaQuery from '@mui/material/useMediaQuery';
+import Links from 'assets/links';
+import { useTranslation } from 'react-i18next';
+import { useDispatch, useSelector } from 'react-redux';
+import Slider from 'react-slick';
 
 interface Props {
   classes: any;
@@ -59,33 +56,16 @@ interface Props {
 
 function OnboardingDialog(props: Props) {
   const { t } = useTranslation();
-  //const [activeStep, setActiveStep] = useState(0);
   const { open, onClose } = props;
   const isPersistTagsInSidecar = useSelector(getPersistTagsInSidecarFile);
   const currentTheme = useSelector(getCurrentTheme);
   const dispatch: AppDispatch = useDispatch();
-  //const swiperElRef = useRef(null); //<SwiperRef>
-
-  /*useEffect(() => {
-  if(swiperElRef.current){
-    // listen for Swiper events using addEventListener
-    swiperElRef.current.addEventListener('progress', (e) => {
-      const [swiper, progress] = e.detail;
-      console.log(progress);
-    });
-
-    swiperElRef.current.addEventListener('slidechange', (e) => {
-      console.log('slide changed');
-    });
-    }
-  }, []);*/
 
   const setPersistTagsInSidecarFile = (isPersistTagsInSidecar) => {
     dispatch(
       SettingsActions.setPersistTagsInSidecarFile(isPersistTagsInSidecar),
     );
   };
-  //const maxSteps = 4;
 
   const setCurrentTheme = (theme) => {
     dispatch(SettingsActions.setCurrentTheme(theme));
@@ -96,13 +76,13 @@ function OnboardingDialog(props: Props) {
   };
 
   const theme = useTheme();
-  const fullScreen = useMediaQuery(theme.breakpoints.down('md'));
+  const smallScreen = useMediaQuery(theme.breakpoints.down('md'));
 
   function NextArrow(props) {
     const { className, style, onClick } = props;
     return (
       <div className={className} onClick={onClick}>
-        <NavigateNextIcon color="primary" />
+        <NavigateNextIcon fontSize="large" color="primary" />
       </div>
     );
   }
@@ -111,7 +91,7 @@ function OnboardingDialog(props: Props) {
     const { className, style, onClick } = props;
     return (
       <div className={className} onClick={onClick}>
-        <NavigateBeforeIcon color="primary" />
+        <NavigateBeforeIcon fontSize="large" color="primary" />
       </div>
     );
   }
@@ -119,7 +99,7 @@ function OnboardingDialog(props: Props) {
   const sliderSettings = {
     className: 'center',
     centerMode: true,
-    dots: true,
+    // dots: true,
     infinite: false,
     initialSlide: 0,
     centerPadding: '0px',
@@ -136,12 +116,15 @@ function OnboardingDialog(props: Props) {
       open={open}
       onClose={onClose}
       keepMounted
-      fullScreen={fullScreen}
+      fullScreen={smallScreen}
       scroll="paper"
     >
-      <DialogTitle style={{ justifyContent: 'center', textAlign: 'center' }}>
-        <DialogCloseButton testId="closeOnboardingDialog" onClose={onClose} />
-      </DialogTitle>
+      <TsDialogTitle
+        dialogTitle={''}
+        style={{ height: 25 }}
+        onClose={onClose}
+        closeButtonTestId={'closeOnboardingDialog'}
+      />
       <DialogContent
         style={{
           overflowY: 'auto',
@@ -152,6 +135,7 @@ function OnboardingDialog(props: Props) {
           {`
             .slick-arrow {
               height: 200px;
+              width: 50px;
               display: flex;
               align-items: center;
             } 
@@ -167,7 +151,6 @@ function OnboardingDialog(props: Props) {
           <div>
             <div
               style={{
-                padding: 15,
                 textAlign: 'center',
               }}
             >
@@ -200,142 +183,196 @@ function OnboardingDialog(props: Props) {
               </ToggleButtonGroup>
             </div>
           </div>
-          <div style={{ overflow: 'hidden' }}>
-            <Typography variant="h5">
-              Choose your the default tagging method for files
-            </Typography>
-            <Typography variant="h5">&nbsp;</Typography>
-            <Typography variant="body1">
-              Core functionality of the application the tagging of files and
-              folders. Here you can choose how tags will attached to files.
-            </Typography>
-            <FormControl
-              style={{ marginTop: 20, marginBottom: 20 }}
-              component="fieldset"
+          <div>
+            <div
+              style={{
+                textAlign: 'center',
+              }}
             >
-              <RadioGroup
-                aria-label="fileTaggingType"
-                name="isPersistTagsInSidecar"
-                onChange={toggleTaggingType}
+              <Typography variant="h5">
+                Choose the default tagging method for files
+              </Typography>
+              <Typography variant="h5">&nbsp;</Typography>
+              {/* <Typography variant="body1">
+                Core functionality of the application the tagging of files and
+                folders. Here you can choose how tags will be attached to files.
+              </Typography> */}
+              <FormControl
+                style={{ marginTop: 20, marginBottom: 20 }}
+                component="fieldset"
               >
-                <FormControlLabel
-                  value="false"
-                  control={<Radio checked={!isPersistTagsInSidecar} />}
-                  label={
-                    <Typography
-                      variant="subtitle1"
-                      style={{ textAlign: 'left' }}
-                    >
-                      Use the name of file for saving the tags - Tagging the
-                      file <strong>image.jpg</strong> with a tag{' '}
-                      <strong>sunset</strong> will rename it to{' '}
-                      <strong>image[sunset].jpg</strong>
-                    </Typography>
-                  }
-                />
-
-                <FormControlLabel
-                  style={{ marginTop: 20 }}
-                  value="true"
-                  control={<Radio checked={isPersistTagsInSidecar} />}
-                  label={
-                    <Typography
-                      variant="subtitle1"
-                      style={{ textAlign: 'left' }}
-                    >
-                      Use sidecar file for saving the tags - Tagging the file{' '}
-                      <strong>image.jpg</strong> with a tag{' '}
-                      <strong>sunset</strong> will save this tag in an
-                      additional sidecar file called{' '}
-                      <strong>image.jpg.json</strong> located in a sub folder
-                      with the name
-                      <strong>.ts</strong>
-                    </Typography>
-                  }
-                />
-                <img
-                  style={{ maxHeight: 200, marginTop: 15 }}
-                  src={ChooseTagging}
-                  alt=""
-                />
-              </RadioGroup>
-            </FormControl>
-            <Typography variant="body1">
-              You can always revise you decision and change the tagging method.
-              But files already tagged with the renaming method will stay
-              renamed and the created sidecar file with the tags will stay.
-            </Typography>
-          </div>
-          <div style={{ textAlign: 'center' }}>
-            <Typography variant="h5">
-              Collect web pages, create bookmarks or take screenshot from
-              websites directly in your web browser.
-            </Typography>
-            <img
-              style={{
-                maxHeight: 300,
-                paddingTop: 15,
-                paddingBottom: 20,
-                margin: 'auto',
-                display: 'block',
-              }}
-              src={BrowserExtension}
-              alt=""
-            />
-            <Typography variant="body1">
-              Check out our web clipper browser extension for Chrome, Edge and
-              Firefox. It is available for free in the official browser stores.
-            </Typography>
-            <Button
-              style={{
-                marginTop: 20,
-                marginLeft: 'auto',
-                marginRight: 'auto',
-                marginBottom: 20,
-                display: 'block',
-              }}
-              onClick={() => {
-                openURLExternally(Links.links.webClipper, true);
-              }}
-              variant="contained"
-              color="primary"
-            >
-              Get the web clipper
-            </Button>
+                <RadioGroup
+                  aria-label="fileTaggingType"
+                  name="isPersistTagsInSidecar"
+                  onChange={toggleTaggingType}
+                >
+                  <FormControlLabel
+                    value="false"
+                    control={<Radio checked={!isPersistTagsInSidecar} />}
+                    label={
+                      <Typography
+                        variant="subtitle1"
+                        style={{ textAlign: 'left' }}
+                      >
+                        Use the name of file for saving the tags - tagging the
+                        file <strong>image.jpg</strong> with the tag{' '}
+                        <strong>sunset</strong> will rename it to{' '}
+                        <strong>image[sunset].jpg</strong>
+                      </Typography>
+                    }
+                  />
+                  <FormControlLabel
+                    style={{ marginTop: 20 }}
+                    value="true"
+                    control={<Radio checked={isPersistTagsInSidecar} />}
+                    label={
+                      <Typography
+                        variant="subtitle1"
+                        style={{ textAlign: 'left' }}
+                      >
+                        Use sidecar file for saving the tags - tagging the file{' '}
+                        <strong>image.jpg</strong> with a tag{' '}
+                        <strong>sunset</strong> will store this tag in an
+                        separate file called <strong>image.jpg.json</strong>{' '}
+                        located in a sub folder with the name{' '}
+                        <strong>.ts</strong>
+                      </Typography>
+                    }
+                  />
+                </RadioGroup>
+              </FormControl>
+              <img
+                style={{ maxHeight: 200, margin: 'auto' }}
+                src={ChooseTagging}
+                alt=""
+              />
+              <Typography variant="body2">
+                You can change this decision later. But files already tagged
+                with the renaming method will stay renamed.
+              </Typography>
+            </div>
           </div>
           <div>
-            <Typography variant="h5">
-              We hope you will love TagSpaces as much as we do!
-            </Typography>
-            <img
-              style={{
-                maxHeight: 300,
-                maxWidth: '90%',
-                paddingTop: 70,
-                margin: 'auto',
-                display: 'block',
-              }}
-              src={WizardFinished}
-              alt=""
-            />
-            <Typography variant="body1">
-              If you want to learn more about the application, you can start the
-              introduction from the welcome screen.
-            </Typography>
-            <Button
-              style={{
-                marginTop: 20,
-                marginLeft: 'auto',
-                marginRight: 'auto',
-                marginBottom: 20,
-                display: 'block',
-              }}
-              onClick={onClose}
-              variant="contained"
-              color="primary"
-            >
-              Start using TagSpaces
-            </Button>
+            <div style={{ textAlign: 'center' }}>
+              <Typography variant="h5" style={{ marginBottom: 20 }}>
+                Create and collect digital content
+              </Typography>
+              <Typography variant="body1">
+                With the TagSpaces Web Clipper you can collect web pages,
+                bookmarks or screenshot from the Web. With the built-in text
+                editors you can create digital notes, which can include tables,
+                todo-lists, math formulas or diagrams.
+              </Typography>
+              <img
+                style={{
+                  maxHeight: 300,
+                  paddingTop: 15,
+                  paddingBottom: 20,
+                  margin: 'auto',
+                  display: 'block',
+                }}
+                src={BrowserExtension}
+                alt=""
+              />
+              <Typography variant="body1">
+                Check out our web clipper browser extension for Chrome, Edge and
+                Firefox. It is available for free in the official browser
+                stores.
+              </Typography>
+              <TsButton
+                style={{
+                  marginTop: 20,
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  marginBottom: 20,
+                  display: 'block',
+                }}
+                onClick={() => {
+                  openURLExternally(Links.links.webClipper, true);
+                }}
+              >
+                Get the web clipper
+              </TsButton>
+            </div>
+          </div>
+          <div>
+            <div style={{ textAlign: 'center' }}>
+              <Typography variant="h5" style={{ marginBottom: 20 }}>
+                Organize and Annotate
+              </Typography>
+              <Typography variant="body1">
+                TagSpaces can connect to folders from your hard drive or S3
+                buckets. It provides a convenient way to browse and manage the
+                content of the connected folders which we call <b>locations</b>.
+                You have the ability to add tags to any file or folder.
+              </Typography>
+              <img
+                style={{
+                  maxHeight: 300,
+                  maxWidth: '90%',
+                  paddingTop: 15,
+                  paddingBottom: 20,
+                  margin: 'auto',
+                  display: 'block',
+                }}
+                src={Organize}
+                alt=""
+              />
+              <Typography variant="body1">
+                In TagSpaces Pro you can add <b>description</b> and{' '}
+                <b>geo-tags</b> to your files and folders. On top of that we
+                offer various views for your folders which call{' '}
+                <b>perspectives</b>.
+              </Typography>
+              <TsButton
+                style={{
+                  marginTop: 20,
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  marginBottom: 20,
+                  display: 'block',
+                }}
+                onClick={() => {
+                  openURLExternally(Links.links.productPro, true);
+                }}
+              >
+                More about TagSpaces Pro
+              </TsButton>
+            </div>
+          </div>
+          <div>
+            <div style={{ textAlign: 'center' }}>
+              <Typography variant="h5">
+                We hope you will love TagSpaces as much as we do!
+              </Typography>
+              <img
+                style={{
+                  maxHeight: 300,
+                  maxWidth: '90%',
+                  paddingTop: 70,
+                  margin: 'auto',
+                  display: 'block',
+                }}
+                src={WizardFinished}
+                alt=""
+              />
+              <Typography variant="body1">
+                If you want to learn more about how to use the application,
+                please start the introduction from the following screen.
+              </Typography>
+              <TsButton
+                style={{
+                  marginTop: 20,
+                  marginLeft: 'auto',
+                  marginRight: 'auto',
+                  marginBottom: 20,
+                  display: 'block',
+                }}
+                onClick={onClose}
+              >
+                Start using TagSpaces
+              </TsButton>
+            </div>
           </div>
         </Slider>
       </DialogContent>

@@ -1,6 +1,6 @@
 /**
  * TagSpaces - universal file and folder organizer
- * Copyright (C) 2017-present TagSpaces UG (haftungsbeschraenkt)
+ * Copyright (C) 2017-present TagSpaces GmbH
  *
  * This program is free software: you can redistribute it and/or modify
  * it under the terms of the GNU Affero General Public License (version 3) as
@@ -16,42 +16,45 @@
  *
  */
 
-import React, { useReducer } from 'react';
-import { useSelector, useDispatch } from 'react-redux';
-import Typography from '@mui/material/Typography';
+import WelcomeLogo from '-/assets/images/welcome-logo.png';
+import {
+  CreateFileIcon,
+  HelpIcon,
+  KeyShortcutsIcon,
+  LocalLocationIcon,
+  OpenLinkIcon,
+} from '-/components/CommonIcons';
+import HowToStart from '-/components/HowToStart';
+import RenderHistory from '-/components/RenderHistory';
+import { useAboutDialogContext } from '-/components/dialogs/hooks/useAboutDialogContext';
+import { useCreateEditLocationDialogContext } from '-/components/dialogs/hooks/useCreateEditLocationDialogContext';
+import { useKeyboardDialogContext } from '-/components/dialogs/hooks/useKeyboardDialogContext';
+import { useLinkDialogContext } from '-/components/dialogs/hooks/useLinkDialogContext';
+import { useNewFileDialogContext } from '-/components/dialogs/hooks/useNewFileDialogContext';
+import { Pro } from '-/pro';
+import { getDesktopMode } from '-/reducers/settings';
+import { openURLExternally } from '-/services/utils-io';
+import { TS } from '-/tagspaces.namespace';
+import IssueIcon from '@mui/icons-material/BugReport';
+import EmailIcon from '@mui/icons-material/Email';
+import NewFeatureIcon from '@mui/icons-material/Gesture';
+import ChangeLogIcon from '@mui/icons-material/ImportContacts';
+import WebClipperIcon from '@mui/icons-material/Transform';
+import TranslationIcon from '@mui/icons-material/Translate';
+import XIcon from '@mui/icons-material/X';
+import Box from '@mui/material/Box';
+import Divider from '@mui/material/Divider';
+import Grid from '@mui/material/Grid2';
 import List from '@mui/material/List';
 import ListItem from '@mui/material/ListItem';
 import ListItemIcon from '@mui/material/ListItemIcon';
 import ListItemText from '@mui/material/ListItemText';
-import Box from '@mui/material/Box';
-import Grid from '@mui/material/Grid';
-import Divider from '@mui/material/Divider';
-import ChangeLogIcon from '@mui/icons-material/ImportContacts';
-import WebClipperIcon from '@mui/icons-material/Transform';
-import EmailIcon from '@mui/icons-material/Email';
-import IssueIcon from '@mui/icons-material/BugReport';
-import TranslationIcon from '@mui/icons-material/Translate';
-import NewFeatureIcon from '@mui/icons-material/Gesture';
-import XIcon from '@mui/icons-material/X';
-import WelcomeBackground from '-/assets/images/background.png';
-import WelcomeLogo from '-/assets/images/welcome-logo.png';
-import {
-  CreateFileIcon,
-  LocalLocationIcon,
-  OpenLinkIcon,
-  KeyShortcutsIcon,
-  HelpIcon,
-} from '-/components/CommonIcons';
-import { actions as AppActions, AppDispatch } from '-/reducers/app';
-import { getDesktopMode } from '-/reducers/settings';
-import Links from 'assets/links';
-import { Pro } from '-/pro';
-import { TS } from '-/tagspaces.namespace';
-import HowToStart from '-/components/HowToStart';
-import { openURLExternally } from '-/services/utils-io';
+import Typography from '@mui/material/Typography';
 import { styled, useTheme } from '@mui/material/styles';
+import Links from 'assets/links';
+import { useContext, useReducer } from 'react';
 import { useTranslation } from 'react-i18next';
-import RenderHistory from '-/components/RenderHistory';
+import { useSelector } from 'react-redux';
 
 const PREFIX = 'WelcomePanel';
 
@@ -83,40 +86,31 @@ const Root = styled('div')(({ theme }) => ({
 function WelcomePanel() {
   const { t } = useTranslation();
   const theme = useTheme();
-  const dispatch: AppDispatch = useDispatch();
+  const { openCreateEditLocationDialog } = useCreateEditLocationDialogContext();
+  const { openNewFileDialog } = useNewFileDialogContext();
+  const { openAboutDialog } = useAboutDialogContext();
+  const { openKeyboardDialog } = useKeyboardDialogContext();
+  const { openLinkDialog } = useLinkDialogContext();
+  const historyContext = Pro?.contextProviders?.HistoryContext
+    ? useContext<TS.HistoryContextData>(Pro.contextProviders.HistoryContext)
+    : undefined;
   const desktopMode = useSelector(getDesktopMode);
 
-  const toggleNewFileDialogDispatch = () =>
-    dispatch(AppActions.toggleNewFileDialog());
-  const toggleLocationDialogDispatch = () =>
-    dispatch(AppActions.toggleLocationDialog());
-  const toggleOpenLinkDialogDispatch = () =>
-    dispatch(AppActions.toggleOpenLinkDialog());
-  const toggleKeysDialogDispatch = () =>
-    dispatch(AppActions.toggleKeysDialog());
+  const [ignored, forceUpdate] = useReducer((x) => x + 1, 0, undefined);
 
-  const [ignored, forceUpdate] = useReducer((x) => x + 1, 0);
-
-  const historyKeys = Pro && Pro.history ? Pro.history.historyKeys : {};
+  const historyKeys = Pro ? Pro.keys.historyKeys : {};
   const fileOpenHistoryItems: Array<TS.HistoryItem> = Pro
-    ? Pro.history.getHistory(historyKeys.fileOpenKey)
+    ? historyContext.fileOpenHistory
     : [];
   const fileEditHistoryItems: Array<TS.HistoryItem> = Pro
-    ? Pro.history.getHistory(historyKeys.fileEditKey)
+    ? historyContext.fileEditHistory
     : [];
   const folderOpenHistoryItems: Array<TS.HistoryItem> = Pro
-    ? Pro.history.getHistory(historyKeys.folderOpenKey)
+    ? historyContext.folderOpenHistory
     : [];
 
   const showDelete = false;
   const maxRecentItems = 5;
-
-  /*function triggerOpenLocation() {
-    const button = document.getElementById(
-      desktopMode ? 'locationMenuButton' : 'mobileMenuButton'
-    );
-    button.click();
-  }*/
 
   function renderRecentItems() {
     return (
@@ -204,20 +198,11 @@ function WelcomePanel() {
           role="button"
           aria-hidden="true"
           tabIndex={0}
-          onClick={() => dispatch(AppActions.toggleAboutDialog())}
+          onClick={() => openAboutDialog()}
         >
           <img src={WelcomeLogo} alt="Organize your files" />
         </div>
-        {/* <ListItem onClick={triggerOpenLocation}>
-          <ListItemIcon>
-            <LocalLocationIcon />
-          </ListItemIcon>
-          <ListItemText
-            primary={t('core:chooseLocation')}
-            className={classes.listItem}
-          />
-        </ListItem> */}
-        <ListItem onClick={toggleNewFileDialogDispatch}>
+        <ListItem onClick={() => openNewFileDialog()}>
           <ListItemIcon>
             <CreateFileIcon />
           </ListItemIcon>
@@ -226,7 +211,7 @@ function WelcomePanel() {
             className={classes.listItem}
           />
         </ListItem>
-        <ListItem onClick={toggleLocationDialogDispatch}>
+        <ListItem onClick={() => openCreateEditLocationDialog()}>
           <ListItemIcon>
             <LocalLocationIcon />
           </ListItemIcon>
@@ -235,7 +220,7 @@ function WelcomePanel() {
             className={classes.listItem}
           />
         </ListItem>
-        <ListItem onClick={toggleOpenLinkDialogDispatch}>
+        <ListItem onClick={() => openLinkDialog()}>
           <ListItemIcon>
             <OpenLinkIcon />
           </ListItemIcon>
@@ -255,7 +240,7 @@ function WelcomePanel() {
             className={classes.listItem}
           />
         </ListItem>
-        <ListItem onClick={toggleKeysDialogDispatch}>
+        <ListItem onClick={() => openKeyboardDialog()}>
           <ListItemIcon>
             <KeyShortcutsIcon />
           </ListItemIcon>
@@ -355,36 +340,19 @@ function WelcomePanel() {
         height: '100%',
       }}
     >
-      <div
-        style={{
-          backgroundColor: theme.palette.background.default,
-          backgroundImage: 'url(' + WelcomeBackground + ')',
-          backgroundRepeat: 'repeat',
-          opacity: '0.4',
-          position: 'absolute',
-          left: 0,
-          top: 0,
-          width: '100%',
-          height: '100%',
-        }}
-      />
       <Grid
         style={{
           position: 'relative',
           height: '100%',
         }}
         container
-        spacing={3}
+        spacing={2}
       >
-        <Grid
-          item
-          xs="auto"
-          style={{ height: '100%', zIndex: 1, minWidth: 300 }}
-        >
+        <Grid style={{ height: '100%', zIndex: 1, minWidth: 300 }}>
           {renderQuickLinks()}
         </Grid>
         {desktopMode && (
-          <Grid item xs="auto" style={{ height: '100%' }}>
+          <Grid style={{ height: '100%' }}>
             <div
               style={{
                 margin: 'auto',
@@ -400,7 +368,7 @@ function WelcomePanel() {
           </Grid>
         )}
         {Pro && (
-          <Grid item xs="auto" style={{ height: '100%', minWidth: 330 }}>
+          <Grid style={{ height: '100%', minWidth: 300 }}>
             <div
               style={{
                 margin: 'auto',

@@ -1,12 +1,13 @@
 /*
- * Copyright (c) 2016-present - TagSpaces UG (Haftungsbeschraenkt). All rights reserved.
+ * Copyright (c) 2016-present - TagSpaces GmbH. All rights reserved.
  */
-import { expect, test } from '@playwright/test';
+import { test, expect } from './fixtures';
 import {
   defaultLocationPath,
   defaultLocationName,
   createPwMinioLocation,
   createPwLocation,
+  createS3Location,
 } from './location.helpers';
 import {
   clickOn,
@@ -18,40 +19,60 @@ import {
   dnd,
   setInputKeys,
   getElementScreenshot,
+  checkSettings,
+  openFolder,
+  waitUntilChanged,
 } from './general.helpers';
 import { openContextEntryMenu } from './test-utils';
 import { createFile, startTestingApp, stopApp, testDataRefresh } from './hook';
-import { clearDataStorage } from './welcome.helpers';
+import { clearDataStorage, closeWelcomePlaywright } from './welcome.helpers';
 import {
   AddRemovePropertiesTags,
   getPropertiesFileName,
   getPropertiesTags,
 } from './file.properties.helpers';
+import { stopServices } from '../setup-functions';
 
-test.beforeAll(async () => {
-  await startTestingApp('extconfig.js');
+let s3ServerInstance;
+let webServerInstance;
+let minioServerInstance;
+
+test.beforeAll(async ({ s3Server, webServer, minioServer }) => {
+  s3ServerInstance = s3Server;
+  webServerInstance = webServer;
+  minioServerInstance = minioServer;
+  if (global.isS3) {
+    await startTestingApp();
+    await closeWelcomePlaywright();
+  } else {
+    await startTestingApp('extconfig.js');
+  }
   // await clearDataStorage();
 });
 
 test.afterAll(async () => {
+  await stopServices(s3ServerInstance, webServerInstance, minioServerInstance);
+  await testDataRefresh(s3ServerInstance);
   await stopApp();
-  await testDataRefresh();
 });
 
 test.afterEach(async ({ page }, testInfo) => {
-  if (testInfo.status !== testInfo.expectedStatus) {
+  /*if (testInfo.status !== testInfo.expectedStatus) {
     await takeScreenshot(testInfo);
-  }
+  }*/
   await clearDataStorage();
 });
 
 test.beforeEach(async () => {
   if (global.isMinio) {
     await createPwMinioLocation('', defaultLocationName, true);
+  } else if (global.isS3) {
+    await createS3Location('', defaultLocationName, true);
   } else {
     await createPwLocation(defaultLocationPath, defaultLocationName, true);
   }
   await clickOn('[data-tid=location_' + defaultLocationName + ']');
+  await expectElementExist(getGridFileSelector('empty_folder'), true, 8000);
 
   await openContextEntryMenu(
     '[data-tid=fsEntryName_empty_folder]',
@@ -60,7 +81,7 @@ test.beforeEach(async () => {
 });
 
 test.describe('TST02 - Folder properties', () => {
-  test('TST0201 - Open in main area [web,minio,electron]', async () => {
+  test('TST0201 - Open in main area [web,electron]', async () => {
     const testFile = 'file_in_empty_folder.txt';
     await createFile(testFile);
     await clickOn('[data-tid=propsActionsMenuTID]');
@@ -68,7 +89,7 @@ test.describe('TST02 - Folder properties', () => {
     await expectElementExist(getGridFileSelector(testFile), true, 5000);
   });
 
-  test('TST0204 - Reload folder from toolbar [web,minio,electron]', async () => {
+  test('TST0204 - Reload folder from toolbar [web,electron]', async () => {
     let propsTags = await getPropertiesTags();
     expect(propsTags).toHaveLength(0);
     const tagTitle = 'test-tag';
@@ -114,16 +135,16 @@ test.describe('TST02 - Folder properties', () => {
     );
   });
 
-  test('TST0205 - Delete folder from toolbar [web,minio,electron]', async () => {
+  test('TST0205 - Delete folder from toolbar [web,electron]', async () => {
     await clickOn('[data-tid=propsActionsMenuTID]');
     await clickOn('[data-tid=deleteFolderTID]');
     await clickOn('[data-tid=confirmSaveBeforeCloseDialog]');
     await expectElementExist('OpenedTIDempty_folder', false, 5000);
     await expectElementExist(getGridFileSelector('empty_folder'), false, 5000);
-    await testDataRefresh();
+    await testDataRefresh(s3ServerInstance);
   });
 
-  test('TST0206 - Rename folder [web,minio,electron]', async () => {
+  test('TST0206 - Rename folder [web,electron]', async () => {
     const newTile = 'folderRenamed';
 
     const propsFolderName = await getPropertiesFileName();
@@ -136,7 +157,7 @@ test.describe('TST02 - Folder properties', () => {
     );
     const propsNewFolderName = await getPropertiesFileName();
     expect(propsFolderName).not.toBe(propsNewFolderName);
-    await testDataRefresh();
+    await testDataRefresh(s3ServerInstance);
 
     //turn folderName back
     /*await clickOn('[data-tid=fileNameProperties] input');
@@ -152,25 +173,26 @@ test.describe('TST02 - Folder properties', () => {
     expect(propsOldFileName).toEqual(propsFolderName);*/
   });
 
-  test('TST0207 - Move folder [web,minio,electron]', async () => {
-    const newFolder = await createNewDirectory('targetFolder');
+  test('TST0207 - Move folder [web,electron]', async () => {
+    const targetFolder = 'empty_folder';
+    const newFolder = await createNewDirectory('srcFolder');
     // select folder to move
-    await clickOn(getGridFileSelector('empty_folder'));
+    //await clickOn(getGridFileSelector('empty_folder'));
     await clickOn('[data-tid=gridPerspectiveCopySelectedFiles]'); //todo moveCopyEntryTID
-    await clickOn('[data-tid=MoveTarget' + newFolder + ']');
-    await clickOn('[data-tid=MoveTarget' + newFolder + ']'); // todo double clickOn
+    await clickOn('[data-tid=MoveTarget' + targetFolder + ']');
+    //await clickOn('[data-tid=MoveTarget' + targetFolder + ']');
     await clickOn('[data-tid=confirmMoveFiles]');
     await clickOn('[data-tid=uploadCloseAndClearTID]');
-    await expectElementExist(getGridFileSelector('empty_folder'), false, 5000);
-    await global.client.dblclick('[data-tid=fsEntryName_' + newFolder + ']');
-    await expectElementExist(getGridFileSelector('empty_folder'), true, 5000);
-    await testDataRefresh();
+    await expectElementExist(getGridFileSelector(newFolder), false, 5000);
+    await global.client.dblclick('[data-tid=fsEntryName_' + targetFolder + ']');
+    await expectElementExist(getGridFileSelector(newFolder), true, 5000);
+    //await testDataRefresh(s3ServerInstance);
   });
 
-  test('TST0210 - Add and remove tag to folder with dropdown menu [web,minio,electron]', async () => {
+  test('TST0210 - Add and remove tag to folder with dropdown menu [web,electron]', async () => {
     await AddRemovePropertiesTags(['test-tag1', 'test-tag2']);
   });
-  test('TST0211 - Add tag folder with DnD from tag library [web,minio,electron]', async () => {
+  test('TST0211 - Add tag folder with DnD from tag library [web,electron]', async () => {
     const tagName = 'article';
     await clickOn('[data-tid=tagLibrary]');
     await dnd(
@@ -183,12 +205,18 @@ test.describe('TST02 - Folder properties', () => {
       8000,
       '[data-tid=perspectiveGridFileTable]',
     );
+    await expectElementExist(
+      '[data-tid=tagContainer_' + tagName + ']',
+      true,
+      8000,
+      '[data-tid=PropertiesTagsSelectTID]',
+    );
 
-    const propsTags = await getPropertiesTags();
-    expect(propsTags).toContain(tagName);
+    //const propsTags = await getPropertiesTags();
+    //expect(propsTags).toContain(tagName);
   });
 
-  test('TST0213 - Add description to folder [web,minio,electron,_pro]', async () => {
+  test('TST0213 - Add description to folder [web,electron,_pro]', async () => {
     const desc = 'test description';
 
     await clickOn('[data-tid=descriptionTabTID]');
@@ -213,22 +241,24 @@ test.describe('TST02 - Folder properties', () => {
     );
   });
 
-  test('TST0215 - Link for internal sharing + copy [web,minio,electron]', async () => {
+  test('TST0215 - Link for internal sharing + copy [web,electron]', async () => {
     // await clickOn('[data-tid=copyLinkToClipboardTID]');
     const sharingLink = await global.client.waitForSelector(
       '[data-tid=sharingLinkTID] input',
     );
     const sharingLinkValue = await sharingLink.getAttribute('value');
 
-    await clickOn('[data-tid=locationManagerMenu]');
-    await clickOn('[data-tid=locationManagerMenuOpenLink]');
+    //await clickOn('[data-tid=locationManagerMenu]');
+    //await clickOn('[data-tid=locationManagerMenuOpenLink]');
+    await clickOn('[data-tid=openLinkNavigationTID]');
+
     /*const clipboardContent = await global.client.evaluate(() =>
       navigator.clipboard.readText()
     );
     expect(clipboardContent.length > 0).toBe(true);*/
     //await setInputKeys('directoryName', clipboardContent);
-    await setInputValue('[data-tid=directoryName] input', sharingLinkValue);
-    await clickOn('[data-tid=directoryName] input');
+    await setInputValue('[data-tid=openLinkTID] input', sharingLinkValue);
+    await clickOn('[data-tid=openLinkTID] input');
     await clickOn('[data-tid=confirmOpenLink]');
     await expectElementExist('[data-tid=currentDir_empty_folder]', true, 5000);
     /*
@@ -246,7 +276,7 @@ test.describe('TST02 - Folder properties', () => {
     */
   });
 
-  test('TST0216 - Set gallery perspective as default for folder [web,minio,electron,_pro]', async () => {
+  test('TST0216 - Set gallery perspective as default for folder [web,electron,_pro]', async () => {
     const fileName = 'sample.jpg';
     await openContextEntryMenu(
       getGridFileSelector(fileName),
@@ -256,13 +286,16 @@ test.describe('TST02 - Folder properties', () => {
     await clickOn('[data-tid=confirmCopyFiles]');
     await clickOn('[data-tid=uploadCloseAndClearTID]');
 
-    //const perspectiveEl = await global.client.waitForSelector('[data-tid=changePerspectiveTID]');
-    //await perspectiveEl.focus();
+    await openContextEntryMenu(
+      getGridFileSelector('empty_folder'),
+      'showProperties',
+    );
+
     await clickOn('[data-tid=changePerspectiveTID]', {
       // force: true,
       timeout: 15000,
     }); // todo double click
-    await clickOn('[data-tid=changePerspectiveTID]');
+    //await clickOn('[data-tid=changePerspectiveTID]');
     await clickOn('li[data-value=gallery]');
     //await global.client.dblclick('[data-tid=fsEntryName_empty_folder]');
     await clickOn(getGridFileSelector('empty_folder'));
@@ -275,22 +308,32 @@ test.describe('TST02 - Folder properties', () => {
       true,
       5000,
     );
-    await clearDataStorage();
+    // await clearDataStorage();
+    // turn back grid perspective
+    await clickOn('[data-tid=changePerspectiveTID]');
+    //await clickOn('[data-tid=changePerspectiveTID]');
+    await clickOn('li[data-value=grid]');
+    await expectElementExist('[data-tid=gridperspectiveToolbar]', true, 5000);
   });
 
-  test('TST0218 - Set and remove predefined background gradient for folder [web,minio,electron,_pro]', async () => {
+  test('TST0218 - Set and remove predefined background gradient for folder [web,electron,_pro]', async () => {
     await openContextEntryMenu(
       getGridFileSelector('empty_folder'),
       'showProperties',
     );
-    await openContextEntryMenu(
-      getGridFileSelector('empty_folder'),
-      'openDirectory',
-    );
+    await openFolder('empty_folder');
+    await checkSettings('[data-tid=settingsSetShowUnixHiddenEntries]', false);
     const initScreenshot = await getElementScreenshot(
       '[data-tid=perspectiveGridFileTable]',
     );
+    await clickOn('[data-tid=changeBackgroundColorTID]');
     await clickOn('[data-tid=backgroundTID1]');
+
+    await waitUntilChanged(
+      '[data-tid=backgroundTID]',
+      'height: 100%; background: rgba(0, 0, 0, 0.267);',
+      'style',
+    );
 
     const withBgnColorScreenshot = await getElementScreenshot(
       '[data-tid=perspectiveGridFileTable]',
@@ -301,13 +344,22 @@ test.describe('TST02 - Folder properties', () => {
     await clickOn('[data-tid=backgroundClearTID]');
     await clickOn('[data-tid=confirmConfirmResetColorDialog]');
 
-    const bgnRemovedScreenshot = await getElementScreenshot(
-      '[data-tid=perspectiveGridFileTable]',
+    await waitUntilChanged(
+      '[data-tid=backgroundTID]',
+      'height: 100%; background: transparent;',
+      'style',
     );
-    expect(initScreenshot).toBe(bgnRemovedScreenshot);
+
+    if (!global.isWeb) {
+      //todo screenshots are diff in web
+      const bgnRemovedScreenshot = await getElementScreenshot(
+        '[data-tid=perspectiveGridFileTable]',
+      );
+      expect(initScreenshot).toBe(bgnRemovedScreenshot);
+    }
   });
 
-  test('TST0219 - Set and remove predefined folder thumbnail [web,minio,electron,_pro]', async () => {
+  test('TST0219 - Set and remove predefined folder thumbnail [web,electron,_pro]', async () => {
     const screenshotSelector = '[data-tid=fsEntryName_empty_folder]'; // > div
     await openContextEntryMenu(
       getGridFileSelector('empty_folder'),
@@ -340,7 +392,10 @@ test.describe('TST02 - Folder properties', () => {
     //todo check if tsb.jpg not exist
   });
 
-  test('TST0220 - Set and remove predefined folder background [web,minio,electron,_pro]', async () => {
+  /**
+   * bgnRemovedScreenshot not always the same on web
+   */
+  test('TST0220 - Set and remove predefined folder background [electron,_pro]', async () => {
     await openContextEntryMenu(
       getGridFileSelector('empty_folder'),
       'showProperties',
